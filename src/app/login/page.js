@@ -19,11 +19,11 @@ export default function LoginPage() {
         const email = currentUser.email || '';
         if (email === 'operator.sdinpresleling2023@gmail.com') {
           router.push('/admin');
-        } else if (email.endsWith('@gmail.com')) {
+        } else if (email.endsWith('@guru.sd.belajar.id')) {
           router.push('/'); 
         } else {
           await signOut(auth);
-          setErrorMsg("Akses Ditolak! Hanya untuk akun @gmail.com atau Admin.");
+          setErrorMsg("Akses Ditolak! Hanya untuk akun @guru.sd.belajar.id atau Admin.");
           setIsAuthLoading(false);
         }
       } else {
@@ -42,7 +42,7 @@ export default function LoginPage() {
       
       if (email === 'operator.sdinpresleling2023@gmail.com') {
         router.push('/admin');
-      } else if (email.endsWith('@gmail.com')) {
+      } else if (email.endsWith('@guru.sd.belajar.id')) {
         router.push('/');
       } else {
         await signOut(auth);

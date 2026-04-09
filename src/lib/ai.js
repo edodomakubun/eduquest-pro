@@ -1,8 +1,8 @@
-// Menggunakan API Key OpenRouter yang Anda berikan
-const OPENROUTER_API_KEY = "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";
+// Menggunakan API Key OpenRouter baru Anda
+const OPENROUTER_API_KEY = "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";
 
-// Anda bisa mengubah model AI di sini (contoh: 'google/gemini-2.5-flash', 'openai/gpt-4o-mini', dll)
-const AI_MODEL = "google/gemini-1.5-flash"; 
+// Menggunakan Model Gemini 3.1 Flash Lite Preview
+const AI_MODEL = "google/gemini-3.1-flash-lite-preview"; 
 
 export const analyzeBloomWithAI = async (levels, data, isPremium = false, retries = 3) => {
   if (!isPremium) return "Fitur Analisis AI Taksonomi Bloom khusus untuk pengguna Premium.";
@@ -19,19 +19,19 @@ export const analyzeBloomWithAI = async (levels, data, isPremium = false, retrie
         headers: { 
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${OPENROUTER_API_KEY}`,
-          'HTTP-Referer': 'https://eduquest-pro.vercel.app', // Opsional: Untuk analitik OpenRouter
-          'X-Title': 'EduQuest Pro' // Opsional: Untuk analitik OpenRouter
+          'HTTP-Referer': 'https://eduquest-pro.vercel.app', 
+          'X-Title': 'EduQuest Pro'
         },
         body: JSON.stringify({ 
           model: AI_MODEL,
-          messages: [{ role: "user", content: prompt }]
+          messages: [{ role: "user", content: prompt }],
+          reasoning: { enabled: true } // Fitur reasoning khusus model ini
         })
       });
       
       const apiData = await response.json();
       if (!response.ok) throw new Error(apiData.error?.message || 'Gagal menganalisis');
       
-      // Struktur response OpenRouter berbeda dengan Gemini asli
       return apiData.choices?.[0]?.message?.content || 'Analisis selesai.';
     } catch (e) {
       if (i === retries - 1) throw e;
@@ -51,11 +51,9 @@ export const callGeminiTextAPI = async (formData, isPremium = false, retries = 5
   const typesInstruction = activeTypes.map(t => `- ${t.label}: ${t.count} soal`).join('\n');
   const totalSoal = activeTypes.reduce((sum, t) => sum + t.count, 0);
   
-  // Bypass Taksonomi Bloom jika Free
   const activeBlooms = isPremium ? formData.bloomLevels.filter(b => b.checked).map(b => b.label).join(', ') : 'Tidak ada batasan Bloom';
   const bloomInstruction = isPremium ? `Fokus HANYA pada Taksonomi Bloom: ${activeBlooms}.` : 'Buat soal dasar (umum) tanpa spesifikasi Taksonomi Bloom yang rumit.';
   
-  // Bypass Gambar jika Free
   const imageInstruction = isPremium ? `"imagePrompt": "Deskripsi gambar gaya KARTUN ANAK-ANAK. WAJIB BAHASA INDONESIA jika ada teks. Tulis 'none' jika tak butuh."` : `"imagePrompt": "none"`;
 
   const prompt = `Anda asisten pembuat soal ujian Guru SD di Indonesia. Buat total ${totalSoal} soal ujian untuk kelas ${formData.grade} SD, mapel ${formData.subject}. Ujian: ${formData.examType}. ${bloomInstruction} Komposisi: \n${typesInstruction}\nMateri: """${formData.rppText.substring(0, 3000)}"""\nRespons HANYA format JSON murni tanpa awalan/akhiran markdown:\n{ "questions": [ { "id": "q1", "type": "Pilihan Ganda", "text": "Teks soal...", "options": ["A. Opsi 1"], "answer": "Jawaban", "bloomLevel": "Pilih satu Bloom", ${imageInstruction} } ] }`;
@@ -74,7 +72,8 @@ export const callGeminiTextAPI = async (formData, isPremium = false, retries = 5
         },
         body: JSON.stringify({ 
           model: AI_MODEL,
-          messages: [{ role: "user", content: prompt }]
+          messages: [{ role: "user", content: prompt }],
+          reasoning: { enabled: true } // Fitur reasoning khusus model ini
         })
       });
       const data = await response.json();
@@ -84,7 +83,7 @@ export const callGeminiTextAPI = async (formData, isPremium = false, retries = 5
       let jsonText = data.choices?.[0]?.message?.content;
       if (!jsonText) throw new Error("Format respons AI kosong atau tidak valid.");
       
-      // Mengamankan parsing JSON: Membersihkan tag markdown ```json yang kadang dikirim OpenRouter
+      // Mengamankan parsing JSON: Membersihkan tag markdown ```json 
       jsonText = jsonText.replace(/```json/g, '').replace(/```/g, '').trim();
       
       const parsedData = JSON.parse(jsonText);
@@ -97,7 +96,7 @@ export const callGeminiTextAPI = async (formData, isPremium = false, retries = 5
 };
 
 export const callImagenAPI = async (promptText) => {
-  // Gambar tetap menggunakan Pollinations AI gratis & tanpa limit
+  // Gambar tetap menggunakan Pollinations AI
   const finalPrompt = `cute, colorful cartoon style illustration for elementary school educational material. Highly relevant to the subject context. IF there are any written words or texts in the image, THEY MUST BE WRITTEN IN INDONESIAN. Child safe. Concept: ${promptText}`;
   const imageUrl = `https://image.pollinations.ai/prompt/${encodeURIComponent(finalPrompt)}?width=400&height=400&nologo=true`;
   
