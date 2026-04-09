@@ -121,6 +121,11 @@ export default function Home() {
       return;
     }
 
+    // Proteksi: Pastikan Puter.js sudah dimuat
+    if (typeof window !== 'undefined' && !window.puter) {
+      return showError('Sistem AI Gratis (Puter.js) sedang dimuat. Mohon tunggu beberapa detik lalu coba lagi.');
+    }
+
     try {
       const userDocRef = doc(db, 'artifacts', appId, 'public', 'data', 'profiles', user.uid);
       await updateDoc(userDocRef, { coins: increment(-10) });
@@ -162,7 +167,7 @@ export default function Home() {
     }
   };
 
-  // --- FILE UPLOAD RPP (PDF/TXT) ---
+  // --- INISIALISASI SCRIPT EKSTERNAL (PDF.js & Puter.js) ---
   useEffect(() => {
     if (!document.getElementById('pdfjs-script')) {
       const script = document.createElement('script');
@@ -170,6 +175,14 @@ export default function Home() {
       script.src = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.min.js';
       document.head.appendChild(script);
       script.onload = () => window.pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.worker.min.js';
+    }
+    
+    // Tambahkan Script Puter.js (Akses Gemini Bebas Kuota)
+    if (!document.getElementById('puter-script')) {
+      const puterScript = document.createElement('script');
+      puterScript.id = 'puter-script';
+      puterScript.src = 'https://js.puter.com/v2/';
+      document.head.appendChild(puterScript);
     }
   }, []);
 
@@ -212,6 +225,12 @@ export default function Home() {
     if (activeBlooms.length === 0) return setBloomAnalysis('Pilih minimal satu tingkat Taksonomi Bloom.');
     setIsAnalyzingBloom(true);
     const timeoutId = setTimeout(async () => {
+      // Proteksi jika Puter belum termuat
+      if (typeof window !== 'undefined' && !window.puter) {
+        setBloomAnalysis('Memuat sistem AI Puter.js...');
+        setIsAnalyzingBloom(false);
+        return;
+      }
       try { setBloomAnalysis(await analyzeBloomWithAI(activeBlooms, formData, isPremium)); } 
       catch (e) { setBloomAnalysis('Gagal memuat analisis.'); } 
       finally { setIsAnalyzingBloom(false); }
