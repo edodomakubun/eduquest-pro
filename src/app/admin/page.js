@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { ShieldCheck, Users, Settings, Image as ImageIcon, Upload, LogOut, CheckCircle2, AlertCircle, Loader2, Plus, Save, Eye, EyeOff, Trash2 } from 'lucide-react';
+import { ShieldCheck, Users, Settings, Image as ImageIcon, Upload, LogOut, CheckCircle2, AlertCircle, Loader2, Plus, Save, Eye, EyeOff, Trash2, X } from 'lucide-react';
 import { auth, db } from '../../lib/firebase';
 import { onAuthStateChanged, signOut } from 'firebase/auth';
 import { doc, setDoc, onSnapshot, updateDoc, increment, collection } from 'firebase/firestore';

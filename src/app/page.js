@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
+import Link from 'next/link';
 import { 
   BookOpen, Upload, Settings, Wand2, Download, ChevronRight, 
   FileText, CheckCircle2, AlertCircle, Loader2, LogOut, 
@@ -242,7 +243,7 @@ export default function Home() {
                 <Coins className="w-4 h-4 text-amber-500 mr-2" />
                 <span className="text-sm font-bold text-amber-700 mr-2">{coins}</span>
                 <span className="text-xs text-amber-600 hidden sm:inline-block">Koin</span>
-                <button onClick={() => router.push('/payment')} className="ml-3 text-xs bg-amber-500 hover:bg-amber-600 text-white px-2 py-0.5 rounded transition-colors">+ Top Up</button>
+                <Link href="/payment" className="ml-3 text-xs flex items-center bg-amber-500 hover:bg-amber-600 text-white px-2 py-0.5 rounded transition-colors">+ Top Up</Link>
               </div>
               <span className="text-sm font-medium text-slate-600 hidden md:inline-block">{user.name}</span>
               <button onClick={handleLogout} className="text-slate-500 hover:text-slate-800 flex items-center text-sm font-medium transition-colors">
@@ -265,9 +266,9 @@ export default function Home() {
                 <p className="text-amber-700 text-sm mt-0.5">Upgrade paket untuk membuka Upload PDF, Analisis Bloom, semua jenis soal lengkap, dan AI Generator Foto!</p>
               </div>
             </div>
-            <button onClick={() => router.push('/payment')} className="w-full sm:w-auto bg-amber-500 hover:bg-amber-600 text-white text-sm font-bold px-6 py-2.5 rounded-xl shadow-sm transition-transform hover:scale-105 shrink-0">
+            <Link href="/payment" className="w-full sm:w-auto flex items-center justify-center bg-amber-500 hover:bg-amber-600 text-white text-sm font-bold px-6 py-2.5 rounded-xl shadow-sm transition-transform hover:scale-105 shrink-0">
               Upgrade Pro Sekarang
-            </button>
+            </Link>
           </div>
         )}
 

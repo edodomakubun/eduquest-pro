@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
+import Link from 'next/link';
 import { CreditCard, Coins, Check, Download, Image as ImageIcon, Loader2, AlertCircle, CheckCircle2, ChevronLeft } from 'lucide-react';
 import { auth, db } from '../../lib/firebase';
 import { onAuthStateChanged } from 'firebase/auth';
@@ -123,9 +124,9 @@ export default function PaymentPage() {
       <div className="max-w-4xl mx-auto space-y-6 animate-in fade-in">
         <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between mb-8 gap-4">
           <h1 className="text-2xl font-bold text-slate-800 flex items-center"><CreditCard className="w-6 h-6 mr-2 text-blue-600" /> Beli Koin</h1>
-          <button onClick={() => router.push('/')} className="flex items-center text-slate-500 hover:text-slate-800 text-sm bg-white px-4 py-2 border rounded-lg shadow-sm font-medium">
+          <Link href="/" className="flex items-center text-slate-500 hover:text-slate-800 text-sm bg-white px-4 py-2 border rounded-lg shadow-sm font-medium">
              <ChevronLeft className="w-4 h-4 mr-1"/> Kembali ke Aplikasi
-          </button>
+          </Link>
         </div>
 
         {userPendingTx ? (
