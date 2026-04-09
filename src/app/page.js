@@ -60,7 +60,7 @@ export default function Home() {
         const email = currentUser.email || '';
         if (email === 'operator.sdinpresleling2023@gmail.com') {
           router.push('/admin');
-        } else if (email.endsWith('@guru.sd.belajar.id')) {
+        } else if (email.endsWith('@gmail.com')) {
           setUser({ uid: currentUser.uid, name: currentUser.displayName || 'Guru', email: email });
         } else {
           await signOut(auth);
