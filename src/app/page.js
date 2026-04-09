@@ -27,7 +27,7 @@ export default function Home() {
   
   // State Form Generate (Diperbarui dengan opsi soal baru)
   const [formData, setFormData] = useState({
-    subject: 'Matematika', grade: '1', examType: 'Ulangan Harian',
+    subject: 'Matematika', grade: '1', examType: 'Asesmen Formatif',
     bloomLevels: [
       { id: 'c1', label: 'C1 (Mengingat)', checked: true },
       { id: 'c2', label: 'C2 (Memahami)', checked: true },
@@ -282,7 +282,7 @@ export default function Home() {
                   <div>
                     <label className="block text-sm font-medium text-slate-700 mb-1">Mata Pelajaran</label>
                     <select value={formData.subject} onChange={(e) => setFormData({...formData, subject: e.target.value})} className="w-full border rounded-lg px-3 py-2 outline-none focus:ring-2 focus:ring-blue-500 bg-white">
-                      <option>Matematika</option><option>Ilmu Pengetahuan Alam (IPA)</option><option>Ilmu Pengetahuan Sosial (IPS)</option><option>Bahasa Indonesia</option><option>Pendidikan Agama</option>
+                      <option>Matematika</option><option>Ilmu Pengetahuan Alam (IPA)</option><option>Ilmu Pengetahuan Sosial (IPS)</option><option>Bahasa Indonesia</option><option>Pendidikan Agama Kristen</option><option>Pendidikan Agama Islam</option>
                     </select>
                   </div>
                   <div className="grid grid-cols-2 gap-4">
@@ -295,7 +295,7 @@ export default function Home() {
                     <div>
                       <label className="block text-sm font-medium text-slate-700 mb-1">Jenis Ujian</label>
                       <select value={formData.examType} onChange={(e) => setFormData({...formData, examType: e.target.value})} className="w-full border rounded-lg px-3 py-2 outline-none focus:ring-2 focus:ring-blue-500 bg-white">
-                        <option>Ulangan Harian</option><option>Ujian Tengah Semester (UTS)</option><option>Ujian Akhir Semester (UAS)</option>
+                        <option>Asesmen Formatif</option><option>Asesmen Sumatif</option><option>Sumatif Tengah Semester (STS)</option><option>Sumatif Akhir Semester (SAS)</option><option>Sumatif Akhir Tahun (SAT)</option>
                       </select>
                     </div>
                   </div>
