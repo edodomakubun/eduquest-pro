@@ -19,7 +19,7 @@ export default function LoginPage() {
         const email = currentUser.email || '';
         if (email === 'operator.sdinpresleling2023@gmail.com') {
           router.push('/admin');
-        } else if (email.endsWith('@guru.sd.belajar.id')) {
+        } else if (email.endsWith('@gmail.com')) {
           router.push('/'); 
         } else {
           await signOut(auth);
