@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { ShieldCheck, Users, Settings, Image as ImageIcon, Upload, LogOut, CheckCircle2, AlertCircle, Loader2 } from 'lucide-react';
+import { ShieldCheck, Users, Settings, Image as ImageIcon, Upload, LogOut, CheckCircle2, AlertCircle, Loader2, Plus, Save, Eye, EyeOff, Trash2 } from 'lucide-react';
 import { auth, db } from '../../lib/firebase';
 import { onAuthStateChanged, signOut } from 'firebase/auth';
 import { doc, setDoc, onSnapshot, updateDoc, increment, collection } from 'firebase/firestore';
@@ -16,18 +16,19 @@ export default function AdminPage() {
   const [adminTab, setAdminTab] = useState('transactions'); 
   const [allUsers, setAllUsers] = useState([]);
   const [allTransactions, setAllTransactions] = useState([]);
-  const [qrCodeUrl, setQrCodeUrl] = useState('');
-  const [previewImage, setPreviewImage] = useState(null); 
+  const [packages, setPackages] = useState([]); // State untuk manajemen paket
   
+  const [previewImage, setPreviewImage] = useState(null); 
   const [errorMsg, setErrorMsg] = useState('');
   const [successMsg, setSuccessMsg] = useState('');
+  const [isSavingPackages, setIsSavingPackages] = useState(false);
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
       if (currentUser && currentUser.email === 'operator.sdinpresleling2023@gmail.com') {
         setIsAdmin(true);
       } else {
-        router.push('/login'); // <-- Dialihkan ke /login jika bukan Admin
+        router.push('/login'); 
       }
     });
     return () => unsubscribe();
@@ -36,22 +37,35 @@ export default function AdminPage() {
   useEffect(() => {
     if (!isAdmin) return;
     
+    // 1. Ambil Data User
     const usersColRef = collection(db, 'artifacts', appId, 'public', 'data', 'profiles');
     const unsubUsers = onSnapshot(usersColRef, (snapshot) => {
       setAllUsers(snapshot.docs.map(d => ({ id: d.id, ...d.data() })));
     });
 
+    // 2. Ambil Data Transaksi
     const txColRef = collection(db, 'artifacts', appId, 'public', 'data', 'transactions');
     const unsubAllTx = onSnapshot(txColRef, (snapshot) => {
       setAllTransactions(snapshot.docs.map(d => ({ id: d.id, ...d.data() })).sort((a,b) => new Date(b.createdAt) - new Date(a.createdAt)));
     });
 
-    const settingsRef = doc(db, 'artifacts', appId, 'public', 'data', 'settings', 'global');
-    const unsubSettings = onSnapshot(settingsRef, (docSnap) => {
-      if (docSnap.exists()) setQrCodeUrl(docSnap.data().qrCodeImage || '');
+    // 3. Ambil Data Paket
+    const pkgsRef = doc(db, 'artifacts', appId, 'public', 'data', 'settings', 'packages');
+    const unsubPkgs = onSnapshot(pkgsRef, (docSnap) => {
+      if (docSnap.exists()) {
+        setPackages(docSnap.data().items || []);
+      } else {
+        // Jika belum ada, buat paket default
+        const defaultPkgs = [
+          { id: 'pkg_1', name: 'Paket Basic', coins: 100, generate: 10, price: 20000, color: 'blue', isActive: true, qrCode: '' },
+          { id: 'pkg_2', name: 'Paket Basic+', coins: 150, generate: 15, price: 28000, color: 'indigo', isActive: true, qrCode: '' },
+          { id: 'pkg_3', name: 'Paket Premium', coins: 200, generate: 20, price: 35000, color: 'purple', isActive: true, qrCode: '' }
+        ];
+        setDoc(pkgsRef, { items: defaultPkgs });
+      }
     });
 
-    return () => { unsubUsers(); unsubAllTx(); unsubSettings(); };
+    return () => { unsubUsers(); unsubAllTx(); unsubPkgs(); };
   }, [isAdmin]);
 
   const handleImageToAPI = (file, callback) => {
@@ -72,22 +86,11 @@ export default function AdminPage() {
     reader.readAsDataURL(file);
   };
 
-  const handleUploadAdminQR = async (e) => {
-    const file = e.target.files[0];
-    if (!file) return;
-    handleImageToAPI(file, async (base64) => {
-      try {
-        const settingsRef = doc(db, 'artifacts', appId, 'public', 'data', 'settings', 'global');
-        await setDoc(settingsRef, { qrCodeImage: base64 }, { merge: true });
-        showSuccess('QR Code berhasil diperbarui!');
-      } catch (err) { showError('Gagal update QR Code.'); }
-    });
-  };
-
   const approveTransaction = async (tx) => {
     try {
+      // SET isPremium: true KETIKA TRANSAKSI DISETUJUI
       const userRef = doc(db, 'artifacts', appId, 'public', 'data', 'profiles', tx.uid);
-      await updateDoc(userRef, { coins: increment(tx.coinsToAdd) });
+      await updateDoc(userRef, { coins: increment(tx.coinsToAdd), isPremium: true });
       
       const txRef = doc(db, 'artifacts', appId, 'public', 'data', 'transactions', tx.id);
       await updateDoc(txRef, { status: 'approved', approvedAt: new Date().toISOString() });
@@ -97,18 +100,60 @@ export default function AdminPage() {
 
   const handleLogout = async () => {
     await signOut(auth);
-    router.push('/login'); // <-- Mengarahkan ke /login setelah log out
+    router.push('/login');
   };
 
   const showError = (msg) => { setErrorMsg(msg); setTimeout(() => setErrorMsg(''), 5000); };
   const showSuccess = (msg) => { setSuccessMsg(msg); setTimeout(() => setSuccessMsg(''), 5000); };
 
+  // --- LOGIKA MANAJEMEN PAKET ---
+  const updatePackage = (index, field, value) => {
+    const newPkgs = [...packages];
+    newPkgs[index][field] = value;
+    setPackages(newPkgs);
+  };
+
+  const handleUploadPackageQR = (index, e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    handleImageToAPI(file, (base64) => {
+      updatePackage(index, 'qrCode', base64);
+    });
+  };
+
+  const addNewPackage = () => {
+    const newPkg = { 
+      id: 'pkg_' + Date.now(), name: 'Paket Baru', coins: 50, generate: 5, price: 10000, color: 'slate', isActive: false, qrCode: '' 
+    };
+    setPackages([...packages, newPkg]);
+  };
+
+  const deletePackage = (index) => {
+    if (confirm('Yakin ingin menghapus paket ini?')) {
+      const newPkgs = packages.filter((_, i) => i !== index);
+      setPackages(newPkgs);
+    }
+  };
+
+  const savePackagesToDB = async () => {
+    setIsSavingPackages(true);
+    try {
+      const pkgsRef = doc(db, 'artifacts', appId, 'public', 'data', 'settings', 'packages');
+      await setDoc(pkgsRef, { items: packages });
+      showSuccess('Semua pengaturan paket & QR berhasil disimpan!');
+    } catch (e) {
+      showError('Gagal menyimpan paket: ' + e.message);
+    } finally {
+      setIsSavingPackages(false);
+    }
+  };
+
   if (!isAdmin) return <div className="min-h-screen flex items-center justify-center bg-slate-50"><Loader2 className="w-8 h-8 animate-spin text-blue-600"/></div>;
 
   return (
-    <div className="min-h-screen bg-slate-100 text-slate-900 font-sans">
-      {errorMsg && <div className="fixed top-4 right-4 z-50 bg-red-100 text-red-700 px-4 py-3 rounded shadow"><AlertCircle className="inline mr-2" size={20} />{errorMsg}</div>}
-      {successMsg && <div className="fixed top-4 right-4 z-50 bg-green-100 text-green-700 px-4 py-3 rounded shadow"><CheckCircle2 className="inline mr-2" size={20} />{successMsg}</div>}
+    <div className="min-h-screen bg-slate-100 text-slate-900 font-sans pb-20">
+      {errorMsg && <div className="fixed top-4 right-4 z-50 bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded-lg shadow-lg flex items-center"><AlertCircle className="w-5 h-5 mr-2" />{errorMsg}</div>}
+      {successMsg && <div className="fixed top-4 right-4 z-50 bg-green-100 border border-green-400 text-green-700 px-4 py-3 rounded-lg shadow-lg flex items-center"><CheckCircle2 className="w-5 h-5 mr-2" />{successMsg}</div>}
 
       {previewImage && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4" onClick={() => setPreviewImage(null)}>
@@ -124,9 +169,9 @@ export default function AdminPage() {
       </header>
 
       <main className="max-w-7xl mx-auto px-4 py-8">
-        <div className="flex space-x-2 border-b border-slate-300 mb-6">
-          {[{ id: 'transactions', label: 'Verifikasi Pembayaran', icon: ShieldCheck }, { id: 'users', label: 'Data User', icon: Users }, { id: 'settings', label: 'Pengaturan QR', icon: Settings }].map(tab => (
-            <button key={tab.id} onClick={() => setAdminTab(tab.id)} className={`px-4 py-3 text-sm font-bold border-b-2 transition-colors flex items-center ${adminTab === tab.id ? 'border-indigo-600 text-indigo-700 bg-white rounded-t-lg' : 'border-transparent text-slate-500 hover:text-slate-800'}`}>
+        <div className="flex space-x-2 border-b border-slate-300 mb-6 overflow-x-auto hide-scrollbar">
+          {[{ id: 'transactions', label: 'Verifikasi Pembayaran', icon: ShieldCheck }, { id: 'users', label: 'Data User', icon: Users }, { id: 'settings', label: 'Pengaturan Paket & QR', icon: Settings }].map(tab => (
+            <button key={tab.id} onClick={() => setAdminTab(tab.id)} className={`whitespace-nowrap px-4 py-3 text-sm font-bold border-b-2 transition-colors flex items-center ${adminTab === tab.id ? 'border-indigo-600 text-indigo-700 bg-white rounded-t-lg' : 'border-transparent text-slate-500 hover:text-slate-800'}`}>
               <tab.icon className="w-4 h-4 mr-2" /> {tab.label}
               {tab.id === 'transactions' && allTransactions.filter(t => t.status === 'pending').length > 0 && (
                 <span className="ml-2 bg-red-500 text-white text-xs px-2 py-0.5 rounded-full">{allTransactions.filter(t => t.status === 'pending').length}</span>
@@ -184,17 +229,98 @@ export default function AdminPage() {
           </div>
         )}
 
-        {/* TAB: PENGATURAN QR CODE */}
+        {/* TAB: PENGATURAN PAKET & QR CODE */}
         {adminTab === 'settings' && (
-          <div className="max-w-md bg-white border rounded-xl shadow-sm p-6">
-            <h3 className="font-bold text-slate-800 mb-4">Ubah QR Code Pembayaran (User)</h3>
-            <div className="bg-slate-50 p-4 border rounded-xl flex justify-center mb-4">
-              {qrCodeUrl ? <img src={qrCodeUrl} alt="QR Aktif" className="max-w-full h-48 object-cover rounded shadow" /> : <span className="text-slate-400">Belum ada QR Code</span>}
+          <div className="space-y-6">
+            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center bg-white p-5 rounded-xl border shadow-sm gap-4">
+              <div>
+                <h3 className="font-bold text-lg text-slate-800">Manajemen Paket & QR Code</h3>
+                <p className="text-xs text-slate-500">Buat paket baru, ubah harga, atau upload QR spesifik untuk setiap paket.</p>
+              </div>
+              <div className="flex space-x-3 w-full sm:w-auto">
+                <button onClick={addNewPackage} className="flex-1 sm:flex-none bg-slate-100 hover:bg-slate-200 text-slate-700 px-4 py-2.5 rounded-lg text-sm font-medium transition-colors flex items-center justify-center">
+                  <Plus className="w-4 h-4 mr-2"/> Tambah Paket
+                </button>
+                <button onClick={savePackagesToDB} disabled={isSavingPackages} className="flex-1 sm:flex-none bg-indigo-600 hover:bg-indigo-700 disabled:bg-indigo-400 text-white px-5 py-2.5 rounded-lg text-sm font-bold transition-colors flex items-center justify-center shadow-sm">
+                  {isSavingPackages ? <Loader2 className="w-4 h-4 mr-2 animate-spin"/> : <Save className="w-4 h-4 mr-2"/>}
+                  Simpan Semua
+                </button>
+              </div>
             </div>
-            <label className="bg-indigo-50 border border-indigo-200 text-indigo-700 font-bold py-3 px-4 rounded-lg flex justify-center cursor-pointer hover:bg-indigo-100 transition-colors">
-              <Upload className="w-5 h-5 mr-2" /> Unggah Gambar QR Baru
-              <input type="file" accept="image/*" className="hidden" onChange={handleUploadAdminQR} />
-            </label>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+              {packages.map((pkg, index) => (
+                <div key={pkg.id} className={`bg-white rounded-2xl border-2 shadow-sm flex flex-col overflow-hidden transition-all ${pkg.isActive ? 'border-indigo-200 hover:border-indigo-400' : 'border-slate-200 opacity-75 grayscale-[30%]'}`}>
+                  {/* Header Card */}
+                  <div className={`p-3 flex justify-between items-center ${pkg.isActive ? 'bg-indigo-50' : 'bg-slate-100'}`}>
+                    <button onClick={() => updatePackage(index, 'isActive', !pkg.isActive)} className={`text-xs font-bold px-3 py-1.5 rounded-full flex items-center transition-colors ${pkg.isActive ? 'bg-green-100 text-green-700 hover:bg-green-200' : 'bg-slate-200 text-slate-600 hover:bg-slate-300'}`}>
+                      {pkg.isActive ? <><Eye className="w-3 h-3 mr-1"/> Aktif</> : <><EyeOff className="w-3 h-3 mr-1"/> Nonaktif</>}
+                    </button>
+                    <button onClick={() => deletePackage(index)} className="text-red-500 hover:text-red-700 p-1"><Trash2 className="w-4 h-4"/></button>
+                  </div>
+
+                  {/* Form Edit */}
+                  <div className="p-5 space-y-4 flex-grow">
+                    <div>
+                      <label className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-1 block">Nama Paket</label>
+                      <input type="text" value={pkg.name} onChange={(e) => updatePackage(index, 'name', e.target.value)} className="w-full border-b-2 border-slate-200 focus:border-indigo-500 pb-1 outline-none font-bold text-lg text-slate-800 bg-transparent" placeholder="Cth: Paket Premium" />
+                    </div>
+                    <div className="grid grid-cols-2 gap-4">
+                      <div>
+                        <label className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-1 block">Harga (Rp)</label>
+                        <input type="number" value={pkg.price} onChange={(e) => updatePackage(index, 'price', parseInt(e.target.value) || 0)} className="w-full border rounded-lg px-3 py-2 outline-none text-sm font-medium" />
+                      </div>
+                      <div>
+                        <label className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-1 block">Dapat Koin</label>
+                        <input type="number" value={pkg.coins} onChange={(e) => updatePackage(index, 'coins', parseInt(e.target.value) || 0)} className="w-full border rounded-lg px-3 py-2 outline-none text-sm font-medium text-amber-600" />
+                      </div>
+                    </div>
+                    <div className="grid grid-cols-2 gap-4">
+                      <div>
+                        <label className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-1 block">Max Generate</label>
+                        <input type="number" value={pkg.generate} onChange={(e) => updatePackage(index, 'generate', parseInt(e.target.value) || 0)} className="w-full border rounded-lg px-3 py-2 outline-none text-sm font-medium" />
+                      </div>
+                      <div>
+                        <label className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-1 block">Warna Label</label>
+                        <select value={pkg.color} onChange={(e) => updatePackage(index, 'color', e.target.value)} className="w-full border rounded-lg px-3 py-2 outline-none text-sm font-medium">
+                          <option value="blue">Biru</option><option value="indigo">Indigo</option><option value="purple">Ungu</option><option value="green">Hijau</option><option value="amber">Emas</option><option value="slate">Abu-abu</option>
+                        </select>
+                      </div>
+                    </div>
+                    
+                    {/* Upload QR per paket */}
+                    <div className="pt-4 border-t border-slate-100">
+                      <label className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-2 block text-center">QR Code Pembayaran</label>
+                      <div className="flex flex-col items-center">
+                        {pkg.qrCode ? (
+                          <div className="relative mb-3 group">
+                            <img src={pkg.qrCode} alt="QR" className="w-24 h-24 object-cover rounded-lg border shadow-sm" />
+                            <button onClick={() => updatePackage(index, 'qrCode', '')} className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full p-1 opacity-0 group-hover:opacity-100 transition-opacity"><X className="w-3 h-3"/></button>
+                          </div>
+                        ) : (
+                          <div className="w-24 h-24 bg-slate-100 border-2 border-dashed border-slate-300 rounded-lg mb-3 flex items-center justify-center text-slate-400">Kosong</div>
+                        )}
+                        <label className="bg-white border border-slate-300 hover:bg-slate-50 text-slate-700 text-xs font-medium py-1.5 px-3 rounded-lg cursor-pointer transition-colors text-center w-full">
+                          {pkg.qrCode ? 'Ganti QR Code' : '+ Upload QR Code'}
+                          <input type="file" accept="image/*" className="hidden" onChange={(e) => handleUploadPackageQR(index, e)} />
+                        </label>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              ))}
+              
+              {/* Tambah Paket Kosong Card */}
+              <div onClick={addNewPackage} className="border-2 border-dashed border-slate-300 rounded-2xl flex flex-col items-center justify-center text-slate-500 hover:text-indigo-600 hover:border-indigo-400 hover:bg-indigo-50 cursor-pointer transition-all min-h-[400px]">
+                <Plus className="w-12 h-12 mb-2" />
+                <span className="font-bold">Buat Paket Baru</span>
+              </div>
+            </div>
+            
+            <div className="bg-blue-50 text-blue-800 p-4 rounded-xl text-sm border border-blue-200 mt-6 flex items-start">
+              <AlertCircle className="w-5 h-5 mr-3 shrink-0 mt-0.5"/>
+              <p><b>Catatan Penting:</b> Jangan lupa menekan tombol <b>"Simpan Semua"</b> di pojok kanan atas layar setiap kali Anda mengubah, menambah, atau menghapus paket agar perubahannya dapat dilihat oleh pengguna (Guru).</p>
+            </div>
           </div>
         )}
       </main>
