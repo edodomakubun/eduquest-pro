@@ -10,8 +10,9 @@ export const analyzeBloomWithAI = async (levels, data) => {
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }] })
   });
-  if (!response.ok) throw new Error('Gagal menganalisis');
+  
   const apiData = await response.json();
+  if (!response.ok) throw new Error(apiData.error?.message || 'Gagal menganalisis');
   return apiData.candidates?.[0]?.content?.parts?.[0]?.text || 'Analisis selesai.';
 };
 
@@ -33,7 +34,12 @@ export const callGeminiTextAPI = async (formData, retries = 3) => {
         body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }], generationConfig: { responseMimeType: "application/json" } })
       });
       const data = await response.json();
+      
+      if (!response.ok) throw new Error(data.error?.message || `HTTP Error ${response.status}`);
+      
       const jsonText = data.candidates?.[0]?.content?.parts?.[0]?.text;
+      if (!jsonText) throw new Error("Format respons AI kosong atau tidak valid.");
+      
       const parsedData = JSON.parse(jsonText);
       return (parsedData.questions || []).map(q => ({ ...q, text: q.text.replace(/^\d+[\.\)]\s*/, '') }));
     } catch (e) {
@@ -54,6 +60,9 @@ export const callImagenAPI = async (promptText, retries = 3) => {
         body: JSON.stringify({ contents: [{ parts: [{ text: finalPrompt }] }], generationConfig: { responseModalities: ["IMAGE"] } })
       });
       const data = await response.json();
+      
+      if (!response.ok) throw new Error(data.error?.message || `HTTP Error ${response.status}`);
+
       const base64Str = data.candidates?.[0]?.content?.parts?.find(p => p.inlineData)?.inlineData?.data;
       if (base64Str) return `data:image/jpeg;base64,${base64Str}`;
       return null;
