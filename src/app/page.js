@@ -421,7 +421,7 @@ export default function Home() {
             <div className="bg-white rounded-2xl shadow-sm border p-8 sm:p-12">
               <div id="printable-doc-area">
                 <div className="kop-surat mb-6 pb-4 border-b-4 border-double border-slate-800 flex items-center justify-between" style={{ fontFamily: 'Arial, sans-serif' }}>
-                  <div className="w-24 shrink-0"><img src="https://upload.wikimedia.org/wikipedia/commons/thumb/9/90/Logo_of_the_Ministry_of_Education_and_Culture_of_the_Republic_of_Indonesia.svg/400px-Logo_of_the_Ministry_of_Education_and_Culture_of_the_Republic_of_Indonesia.svg.png" alt="Logo" className="w-20 h-auto" /></div>
+                  <div className="w-24 shrink-0"><img src="https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcS-D-Uj4F9vewmJGbsIAoCBWxSUdx-RoBtKvA&s" alt="Logo" className="w-20 h-auto" /></div>
                   <div className="flex-1 text-center">
                     <div style={{ fontSize: '14pt', lineHeight: 1.15 }}>PEMERINTAH KABUPATEN KEPULAUAN TANIMBAR</div>
                     <div style={{ fontSize: '16pt', fontWeight: 'bold' }}>DINAS PENDIDIKAN DAN KEBUDAYAAN</div>
