@@ -28,7 +28,7 @@ export default function LoginPage() {
           router.push('/'); 
         } else {
           await signOut(auth);
-          setErrorMsg("Akses Ditolak! Hanya untuk akun @guru.sd.belajar.id atau Admin.");
+          setErrorMsg("Akses Ditolak! Hanya untuk akun @guru.sd.belajar.id");
           setIsAuthLoading(false);
         }
       } else {
@@ -51,7 +51,7 @@ export default function LoginPage() {
         router.push('/');
       } else {
         await signOut(auth);
-        setErrorMsg("Akses Ditolak! Gunakan akun Belajar.id atau email Admin.");
+        setErrorMsg("Akses Ditolak! Gunakan akun Belajar.id SD Anda.");
       }
     } catch (err) {
       if (err.code !== 'auth/popup-closed-by-user' && err.code !== 'auth/cancelled-popup-request') {
@@ -68,14 +68,14 @@ export default function LoginPage() {
       setErrorMsg("Harap masukkan email dan password.");
       return;
     }
-    setErrorMsg("Login via Email dinonaktifkan. Silakan gunakan tombol Masuk dengan Google (Akun Belajar.id).");
+    setErrorMsg("Login via Email dinonaktifkan. Silakan gunakan tombol Masuk dengan Google (Akun Belajar.id SD).");
   };
 
   if (isAuthLoading) {
     return (
       <div className="min-h-screen flex flex-col items-center justify-center bg-slate-900">
         <Loader2 className="w-12 h-12 animate-spin text-blue-500 mb-4"/>
-        <p className="text-slate-400 font-medium animate-pulse">Memuat sistem keamanan...</p>
+        <p className="text-slate-400 font-medium animate-pulse">EduQuest.ai sedang memuat...</p>
       </div>
     );
   }
