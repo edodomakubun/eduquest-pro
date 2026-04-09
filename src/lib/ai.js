@@ -25,7 +25,8 @@ export const analyzeBloomWithAI = async (levels, data, isPremium = false, retrie
         body: JSON.stringify({ 
           model: AI_MODEL,
           messages: [{ role: "user", content: prompt }],
-          reasoning: { enabled: true } 
+          reasoning: { enabled: true },
+          max_tokens: 1000 // <-- SOLUSI: Batasi token agar tidak melebihi kuota OpenRouter
         })
       });
       
@@ -73,7 +74,8 @@ export const callGeminiTextAPI = async (formData, isPremium = false, retries = 5
         body: JSON.stringify({ 
           model: AI_MODEL,
           messages: [{ role: "user", content: prompt }],
-          reasoning: { enabled: true } 
+          reasoning: { enabled: true },
+          max_tokens: 4000 // <-- SOLUSI: Batasi token agar tidak melebihi kuota OpenRouter
         })
       });
       const data = await response.json();
