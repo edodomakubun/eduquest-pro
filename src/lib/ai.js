@@ -19,14 +19,14 @@ export const analyzeBloomWithAI = async (levels, data, isPremium = false, retrie
         headers: { 
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${OPENROUTER_API_KEY}`,
-          'HTTP-Referer': 'https://eduquest-pro.vercel.app', 
+          'HTTP-Referer': 'https://eduquest-pro-ka55.vercel.app', 
           'X-Title': 'EduQuest Pro'
         },
         body: JSON.stringify({ 
           model: AI_MODEL,
           messages: [{ role: "user", content: prompt }],
           reasoning: { enabled: true },
-          max_tokens: 1000 // <-- SOLUSI: Batasi token agar tidak melebihi kuota OpenRouter
+          max_tokens: 1000 
         })
       });
       
@@ -68,14 +68,14 @@ export const callGeminiTextAPI = async (formData, isPremium = false, retries = 5
         headers: { 
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${OPENROUTER_API_KEY}`,
-          'HTTP-Referer': 'https://eduquest-pro.vercel.app',
+          'HTTP-Referer': 'https://eduquest-pro-ka55.vercel.app',
           'X-Title': 'EduQuest Pro'
         },
         body: JSON.stringify({ 
           model: AI_MODEL,
           messages: [{ role: "user", content: prompt }],
           reasoning: { enabled: true },
-          max_tokens: 4000 // <-- SOLUSI: Batasi token agar tidak melebihi kuota OpenRouter
+          max_tokens: 4000 
         })
       });
       const data = await response.json();
@@ -96,24 +96,42 @@ export const callGeminiTextAPI = async (formData, isPremium = false, retries = 5
   }
 };
 
-export const callImagenAPI = async (promptText) => {
-  // Gambar tetap menggunakan Pollinations AI
+// Mengubah parameter callImagenAPI dengan auto-retry 4 kali
+export const callImagenAPI = async (promptText, retries = 4) => {
   const finalPrompt = `cute, colorful cartoon style illustration for elementary school educational material. Highly relevant to the subject context. IF there are any written words or texts in the image, THEY MUST BE WRITTEN IN INDONESIAN. Child safe. Concept: ${promptText}`;
-  const imageUrl = `https://image.pollinations.ai/prompt/${encodeURIComponent(finalPrompt)}?width=400&height=400&nologo=true`;
   
-  try {
-    const response = await fetch(imageUrl);
-    if (!response.ok) throw new Error('Gagal memuat gambar');
-    const blob = await response.blob();
-    
-    return new Promise((resolve, reject) => {
-      const reader = new FileReader();
-      reader.onloadend = () => resolve(reader.result);
-      reader.onerror = reject;
-      reader.readAsDataURL(blob);
-    });
-  } catch (error) {
-    console.error("Gambar gagal dikonversi ke Base64:", error);
-    return null;
+  for (let i = 0; i < retries; i++) {
+    try {
+      // 1. Tambahkan "seed" (angka acak) agar request dianggap baru dan tidak kena blokir cache CDN
+      const randomSeed = Math.floor(Math.random() * 1000000);
+      const imageUrl = `https://image.pollinations.ai/prompt/${encodeURIComponent(finalPrompt)}?width=400&height=400&nologo=true&seed=${randomSeed}`;
+      
+      // 2. Anti-Spam: Beri jeda/delay yang semakin lama setiap kali melakukan pengulangan
+      if (i > 0) {
+        console.warn(`Mengulang pemuatan gambar... Percobaan ke-${i+1}`);
+        await new Promise(r => setTimeout(r, 2000 * i)); 
+      }
+
+      // 3. Matikan policy referrer agar tidak ditolak oleh jaringan
+      const response = await fetch(imageUrl, { referrerPolicy: "no-referrer" });
+      
+      if (!response.ok) throw new Error(`HTTP Error ${response.status}`);
+      
+      const blob = await response.blob();
+      
+      return await new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onloadend = () => resolve(reader.result);
+        reader.onerror = reject;
+        reader.readAsDataURL(blob);
+      });
+      
+    } catch (error) {
+      // 4. Tangkap error (seperti ERR_CONNECTION_RESET), lalu ulang loop
+      if (i === retries - 1) {
+        console.error("Gagal total mengonversi gambar setelah beberapa percobaan:", error);
+        return null; // Tetap kembalikan null agar tidak merusak aplikasi (gambar akan dilewati)
+      }
+    }
   }
 };
