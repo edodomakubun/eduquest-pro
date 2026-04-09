@@ -420,18 +420,6 @@ export default function Home() {
 
             <div className="bg-white rounded-2xl shadow-sm border p-8 sm:p-12">
               <div id="printable-doc-area">
-                <div className="kop-surat mb-6 pb-4 border-b-4 border-double border-slate-800 flex items-center justify-between" style={{ fontFamily: 'Arial, sans-serif' }}>
-                  <div className="w-24 shrink-0"><img src="https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcS-D-Uj4F9vewmJGbsIAoCBWxSUdx-RoBtKvA&s" alt="Logo" className="w-20 h-auto" /></div>
-                  <div className="flex-1 text-center">
-                    <div style={{ fontSize: '14pt', lineHeight: 1.15 }}>PEMERINTAH KABUPATEN KEPULAUAN TANIMBAR</div>
-                    <div style={{ fontSize: '16pt', fontWeight: 'bold' }}>DINAS PENDIDIKAN DAN KEBUDAYAAN</div>
-                    <div style={{ fontSize: '16pt' }}>SD INPRES LELINGLUAN</div>
-                    <div style={{ fontSize: '10pt', marginTop: '4px' }}>Jln. Wearnusmurin Lelingluan – Kec. Tanut – Kepulauan Tanimbar</div>
-                    <div style={{ fontSize: '10pt' }}>Telepon. (-) , e-mail:sdinpresleling@gmail.com</div>
-                  </div>
-                  <div className="w-24 shrink-0"></div>
-                </div>
-
                 <div className="text-center mb-10"><h1 className="text-xl font-bold uppercase mb-1">SOAL {formData.examType} SD</h1><p className="font-medium">Mata Pelajaran: {formData.subject} | Kelas: {formData.grade}</p></div>
 
                 <div className="space-y-10">
