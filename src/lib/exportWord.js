@@ -6,7 +6,6 @@ export const exportToWord = (formData, questions, coins, showError) => {
         <title>Soal Ujian SD</title>
         <style>
           body { font-family: 'Arial', sans-serif; font-size: 11pt; line-height: 1.5; color: black; }
-          .header-kop { margin-bottom: 20px; padding-bottom: 10px; border-bottom: 3px solid black; font-family: 'Arial', sans-serif; }
           .header-title { text-align: center; font-weight: bold; margin-bottom: 20px; }
           .question-block { margin-bottom: 15px; page-break-inside: avoid; }
           .options { margin-left: 20px; margin-top: 5px; }
@@ -19,24 +18,6 @@ export const exportToWord = (formData, questions, coins, showError) => {
         </style>
       </head>
       <body>
-        <div class="header-kop">
-          <table style="width: 100%; border-collapse: collapse; border: none;">
-            <tr>
-              <td style="width: 15%; text-align: left; vertical-align: middle; border: none;">
-                <img src="[https://upload.wikimedia.org/wikipedia/commons/thumb/9/90/Logo_of_the_Ministry_of_Education_and_Culture_of_the_Republic_of_Indonesia.svg/400px-Logo_of_the_Ministry_of_Education_and_Culture_of_the_Republic_of_Indonesia.svg.png](https://upload.wikimedia.org/wikipedia/commons/thumb/9/90/Logo_of_the_Ministry_of_Education_and_Culture_of_the_Republic_of_Indonesia.svg/400px-Logo_of_the_Ministry_of_Education_and_Culture_of_the_Republic_of_Indonesia.svg.png)" style="width: 80px; height: auto;" alt="Logo Tut Wuri Handayani" />
-              </td>
-              <td style="width: 70%; text-align: center; vertical-align: middle; border: none;">
-                <div style="font-size: 14pt; line-height: 1.15;">PEMERINTAH KABUPATEN KEPULAUAN TANIMBAR</div>
-                <div style="font-size: 16pt; font-weight: bold; line-height: 1.15;">DINAS PENDIDIKAN DAN KEBUDAYAAN</div>
-                <div style="font-size: 16pt; line-height: 1.15;">SD INPRES LELINGLUAN</div>
-                <div style="font-size: 10pt; line-height: 1.0; margin-top: 4px;">Jln. Wearnusmurin Lelingluan – Kec. Tanut – Kepulauan Tanimbar, Maluku</div>
-                <div style="font-size: 10pt; line-height: 1.0;">Telepon. (-) , e-mail:sdinpresleling@gmail.com, Kode Pos 9746</div>
-                <div style="font-size: 10pt; line-height: 1.0;">website: sdinpreslelingluan.com</div>
-              </td>
-              <td style="width: 15%; border: none;"></td>
-            </tr>
-          </table>
-        </div>
         <div class="header-title">
           <span style="font-size: 14pt; text-transform: uppercase;">SOAL ${formData.examType} SD</span><br>
           <span style="font-size: 11pt; font-weight: normal;">Mata Pelajaran: ${formData.subject} | Kelas: ${formData.grade}</span>
