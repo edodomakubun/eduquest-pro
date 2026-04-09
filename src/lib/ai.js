@@ -1,5 +1,5 @@
-// Menggunakan API Key OpenRouter baru Anda
-const OPENROUTER_API_KEY = "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";
+// Mengambil API Key dari brankas rahasia Vercel (Sangat Aman)
+const OPENROUTER_API_KEY = process.env.NEXT_PUBLIC_OPENROUTER_API_KEY;
 
 // Menggunakan Model Gemini 3.1 Flash Lite Preview
 const AI_MODEL = "google/gemini-3.1-flash-lite-preview"; 
@@ -25,7 +25,7 @@ export const analyzeBloomWithAI = async (levels, data, isPremium = false, retrie
         body: JSON.stringify({ 
           model: AI_MODEL,
           messages: [{ role: "user", content: prompt }],
-          reasoning: { enabled: true } // Fitur reasoning khusus model ini
+          reasoning: { enabled: true } 
         })
       });
       
@@ -73,7 +73,7 @@ export const callGeminiTextAPI = async (formData, isPremium = false, retries = 5
         body: JSON.stringify({ 
           model: AI_MODEL,
           messages: [{ role: "user", content: prompt }],
-          reasoning: { enabled: true } // Fitur reasoning khusus model ini
+          reasoning: { enabled: true } 
         })
       });
       const data = await response.json();
@@ -83,7 +83,6 @@ export const callGeminiTextAPI = async (formData, isPremium = false, retries = 5
       let jsonText = data.choices?.[0]?.message?.content;
       if (!jsonText) throw new Error("Format respons AI kosong atau tidak valid.");
       
-      // Mengamankan parsing JSON: Membersihkan tag markdown ```json 
       jsonText = jsonText.replace(/```json/g, '').replace(/```/g, '').trim();
       
       const parsedData = JSON.parse(jsonText);
