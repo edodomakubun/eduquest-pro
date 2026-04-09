@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { BookOpen, Sparkles, Clock, ShieldCheck, Loader2, AlertCircle, Wand2 } from 'lucide-react';
+import { BookOpen, Sparkles, Clock, ShieldCheck, Loader2, AlertCircle, Wand2, Mail, Lock, Eye, EyeOff, ArrowRight } from 'lucide-react';
 import { auth, googleProvider } from '../../lib/firebase';
 import { signInWithPopup, onAuthStateChanged, signOut } from 'firebase/auth';
 
@@ -11,15 +11,20 @@ export default function LoginPage() {
   const [isAuthLoading, setIsAuthLoading] = useState(true); 
   const [isLoggingIn, setIsLoggingIn] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
+  
+  // State untuk form UI Email & Password
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
 
   // Pengecekan sesi saat halaman dimuat
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
       if (currentUser) {
-        const email = currentUser.email || '';
-        if (email === 'operator.sdinpresleling2023@gmail.com') {
+        const userEmail = currentUser.email || '';
+        if (userEmail === 'operator.sdinpresleling2023@gmail.com') {
           router.push('/admin');
-        } else if (email.endsWith('@guru.sd.belajar.id')) {
+        } else if (userEmail.endsWith('@guru.sd.belajar.id')) {
           router.push('/'); 
         } else {
           await signOut(auth);
@@ -38,11 +43,11 @@ export default function LoginPage() {
     setErrorMsg('');
     try {
       const result = await signInWithPopup(auth, googleProvider);
-      const email = result.user.email || '';
+      const userEmail = result.user.email || '';
       
-      if (email === 'operator.sdinpresleling2023@gmail.com') {
+      if (userEmail === 'operator.sdinpresleling2023@gmail.com') {
         router.push('/admin');
-      } else if (email.endsWith('@guru.sd.belajar.id')) {
+      } else if (userEmail.endsWith('@guru.sd.belajar.id')) {
         router.push('/');
       } else {
         await signOut(auth);
@@ -57,127 +62,187 @@ export default function LoginPage() {
     }
   };
 
+  // Handler dummy untuk form email (karena backend menggunakan Google Auth)
+  const handleEmailLogin = (e) => {
+    e.preventDefault();
+    if (!email || !password) {
+      setErrorMsg("Harap masukkan email dan password.");
+      return;
+    }
+    // Jika Anda ingin mengaktifkan Email/Password Auth, logikanya diletakkan di sini.
+    // Saat ini kita menampilkan pesan error edukatif.
+    setErrorMsg("Login via Email dinonaktifkan. Silakan gunakan tombol Masuk dengan Google (Akun Belajar.id).");
+  };
+
   if (isAuthLoading) {
-    return <div className="min-h-screen flex items-center justify-center bg-slate-50"><Loader2 className="w-10 h-10 animate-spin text-blue-600"/></div>;
+    return (
+      <div className="min-h-screen flex flex-col items-center justify-center bg-slate-900">
+        <Loader2 className="w-12 h-12 animate-spin text-blue-500 mb-4"/>
+        <p className="text-slate-400 font-medium animate-pulse">Memuat sistem keamanan...</p>
+      </div>
+    );
   }
 
   return (
-    <div className="min-h-screen flex bg-slate-50 font-sans relative">
+    <div className="min-h-screen w-full flex flex-col lg:flex-row font-sans relative overflow-hidden bg-slate-900 lg:bg-white">
       
-      {/* KIRI - Tampilan Branding (Hanya muncul di Desktop) */}
-      <div className="hidden lg:flex lg:w-1/2 bg-blue-600 p-12 flex-col justify-between relative overflow-hidden">
-         {/* Dekorasi Latar Belakang */}
-         <div className="absolute top-0 left-0 w-full h-full overflow-hidden z-0 pointer-events-none">
-           <div className="absolute -top-24 -left-24 w-96 h-96 bg-blue-500 rounded-full mix-blend-multiply filter blur-3xl opacity-70"></div>
-           <div className="absolute top-1/2 right-12 w-72 h-72 bg-indigo-500 rounded-full mix-blend-multiply filter blur-3xl opacity-70"></div>
+      {/* BACKGROUND MOBILE (Dark Gradient) */}
+      {/* Latar belakang gelap ini hanya muncul di mobile, memastikan kontras super tinggi dengan form putih di tengahnya */}
+      <div className="absolute inset-0 lg:hidden bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-blue-900 via-slate-900 to-black z-0">
+        <div className="absolute top-20 -left-20 w-72 h-72 bg-blue-600/20 rounded-full blur-3xl"></div>
+        <div className="absolute bottom-10 -right-10 w-64 h-64 bg-indigo-600/20 rounded-full blur-3xl"></div>
+      </div>
+
+      {/* KIRI - Tampilan Desktop (Split Screen Panel) */}
+      <div className="hidden lg:flex lg:w-[45%] xl:w-1/2 relative bg-gradient-to-br from-blue-700 via-blue-800 to-indigo-900 p-12 flex-col justify-between overflow-hidden shadow-2xl z-10">
+         {/* Dekorasi Abstract Desktop */}
+         <div className="absolute top-0 left-0 w-full h-full overflow-hidden pointer-events-none">
+           <div className="absolute -top-32 -left-32 w-[30rem] h-[30rem] bg-blue-500/30 rounded-full mix-blend-overlay filter blur-3xl"></div>
+           <div className="absolute top-1/2 -right-20 w-[25rem] h-[25rem] bg-indigo-400/30 rounded-full mix-blend-overlay filter blur-3xl"></div>
+           {/* Grid Pattern Subtle */}
+           <div className="absolute inset-0 bg-[url('https://grainy-gradients.vercel.app/noise.svg')] opacity-20 mix-blend-soft-light"></div>
          </div>
 
-         <div className="relative z-10 mt-8">
-           <div className="flex items-center space-x-2 text-white mb-12">
-             <Wand2 className="w-10 h-10" />
-             <span className="text-3xl font-bold tracking-tight">EduQuest<span className="text-blue-200">.ai</span></span>
+         {/* Header / Logo Panel Kiri */}
+         <div className="relative z-10">
+           <div className="flex items-center space-x-3 text-white mb-16">
+             <div className="bg-white/10 p-3 rounded-2xl backdrop-blur-md border border-white/20 shadow-xl">
+               <Wand2 className="w-8 h-8 text-blue-100" />
+             </div>
+             <span className="text-3xl font-extrabold tracking-tight">EduQuest<span className="text-blue-300 font-medium">.ai</span></span>
            </div>
            
-           <h1 className="text-4xl xl:text-5xl font-bold text-white leading-tight mb-6">
-             Revolusi Pembuatan Soal untuk Guru SD
+           <h1 className="text-4xl xl:text-5xl font-extrabold text-white leading-[1.15] mb-6">
+             Revolusi Pembuatan<br/>Soal untuk Guru SD
            </h1>
-           <p className="text-blue-100 text-lg mb-12 max-w-md leading-relaxed">
+           <p className="text-blue-100/90 text-lg mb-12 max-w-md leading-relaxed font-medium">
              Buat soal ujian terstandarisasi, analisis Taksonomi Bloom, dan ilustrasi edukatif hanya dalam hitungan detik.
            </p>
 
-           <div className="space-y-8">
-             <div className="flex items-center text-blue-50">
-               <div className="w-14 h-14 bg-white/10 rounded-2xl flex items-center justify-center mr-5 backdrop-blur-sm border border-white/10">
-                 <Clock className="w-7 h-7 text-white" />
+           <div className="space-y-6">
+             <div className="flex items-start text-white group">
+               <div className="w-12 h-12 bg-white/10 rounded-xl flex items-center justify-center mr-4 backdrop-blur-md border border-white/10 group-hover:bg-white/20 transition-colors shrink-0">
+                 <Clock className="w-6 h-6 text-blue-200" />
                </div>
                <div>
-                 <h3 className="font-bold text-white text-lg">Hemat Waktu</h3>
-                 <p className="text-sm text-blue-200 mt-1">Dari berjam-jam menjadi beberapa detik.</p>
+                 <h3 className="font-bold text-lg">Hemat Waktu 90%</h3>
+                 <p className="text-sm text-blue-200/80 mt-1 leading-relaxed">Proses penyusunan dari berjam-jam menjadi beberapa detik.</p>
                </div>
              </div>
-             <div className="flex items-center text-blue-50">
-               <div className="w-14 h-14 bg-white/10 rounded-2xl flex items-center justify-center mr-5 backdrop-blur-sm border border-white/10">
-                 <Sparkles className="w-7 h-7 text-white" />
+             <div className="flex items-start text-white group">
+               <div className="w-12 h-12 bg-white/10 rounded-xl flex items-center justify-center mr-4 backdrop-blur-md border border-white/10 group-hover:bg-white/20 transition-colors shrink-0">
+                 <Sparkles className="w-6 h-6 text-blue-200" />
                </div>
                <div>
-                 <h3 className="font-bold text-white text-lg">AI Kualitas Tinggi</h3>
-                 <p className="text-sm text-blue-200 mt-1">Standar HOTS & Export langsung ke MS Word.</p>
+                 <h3 className="font-bold text-lg">AI Standar HOTS</h3>
+                 <p className="text-sm text-blue-200/80 mt-1 leading-relaxed">Didukung kecerdasan buatan dengan format MS Word siap cetak.</p>
                </div>
              </div>
            </div>
          </div>
          
-         <div className="relative z-10 text-blue-200/60 text-sm font-medium">
-           © {new Date().getFullYear()} Dinas Pendidikan & Kebudayaan.
+         <div className="relative z-10 flex items-center text-blue-200/60 text-sm font-medium">
+           <ShieldCheck className="w-4 h-4 mr-2" />
+           Sistem Keamanan Terenkripsi © {new Date().getFullYear()}
          </div>
       </div>
 
-      {/* Latar Belakang Khusus Mobile */}
-      <div className="absolute top-0 inset-x-0 w-full h-[55vh] bg-gradient-to-b from-blue-700 to-blue-500 lg:hidden rounded-b-[3rem] shadow-lg -z-10 overflow-hidden">
-        {/* Ornamen Cahaya di Mobile */}
-        <div className="absolute top-4 -left-10 w-40 h-40 bg-white/10 rounded-full blur-3xl"></div>
-        <div className="absolute bottom-10 -right-10 w-48 h-48 bg-indigo-400/40 rounded-full blur-3xl"></div>
-      </div>
-
-      {/* KANAN - Area Konten Login */}
-      <div className="w-full lg:w-1/2 flex flex-col justify-center p-4 sm:p-8 lg:p-12 relative min-h-screen lg:min-h-0">
+      {/* KANAN - Area Konten Login (Tengah pada Mobile) */}
+      <div className="w-full lg:w-[55%] xl:w-1/2 flex items-center justify-center p-4 sm:p-8 relative z-10 min-h-screen lg:min-h-0">
         
-        <div className="w-full max-w-md mx-auto animate-in fade-in slide-in-from-bottom-8">
+        {/* Kontainer Form Login */}
+        <div className="w-full max-w-[420px] bg-white rounded-[2.5rem] shadow-2xl border border-slate-100 p-8 sm:p-10 animate-in fade-in slide-in-from-bottom-8">
           
-          {/* Header/Branding Khusus Mobile */}
-          <div className="lg:hidden flex flex-col items-center justify-center text-white mb-8 mt-4 sm:mt-0">
-             <div className="flex items-center space-x-3 mb-4">
-               <div className="bg-white/20 p-2.5 rounded-2xl backdrop-blur-md border border-white/20 shadow-inner">
-                 <Wand2 className="w-8 h-8 text-white" />
-               </div>
-               <span className="text-4xl font-extrabold tracking-tight">EduQuest<span className="text-blue-200">.ai</span></span>
-             </div>
-             <p className="text-blue-50 text-center text-sm sm:text-base px-6 max-w-xs leading-relaxed font-medium">
-               Asisten AI cerdas pembuat soal ujian & ilustrasi khusus Guru SD.
-             </p>
-          </div>
-
-          {/* Kotak Putih Login */}
-          <div className="bg-white rounded-[2rem] shadow-2xl shadow-blue-900/10 border border-slate-100 p-8 sm:p-10 text-center relative overflow-hidden">
-            {/* Garis Warna di Atas Kartu */}
-            <div className="absolute top-0 left-0 w-full h-1.5 bg-gradient-to-r from-blue-500 to-indigo-600"></div>
-
-            <h2 className="text-2xl sm:text-3xl font-extrabold text-slate-800 mb-2 mt-2">Selamat Datang</h2>
-            <p className="text-slate-500 mb-8 text-sm sm:text-base">Akses khusus tenaga pendidik. Gunakan akun <b>Belajar.id</b> atau <b>Admin</b>.</p>
-
-            {errorMsg && (
-              <div className="mb-6 bg-red-50 border border-red-200 text-red-600 px-4 py-3 rounded-xl flex items-center text-left text-sm">
-                <AlertCircle className="w-5 h-5 mr-3 shrink-0" />
-                <span>{errorMsg}</span>
+          {/* Header Card Login */}
+          <div className="text-center mb-8">
+            <div className="lg:hidden flex items-center justify-center space-x-2 text-blue-600 mb-6">
+              <div className="bg-blue-50 p-2.5 rounded-xl border border-blue-100">
+                <Wand2 className="w-6 h-6 text-blue-600" />
               </div>
-            )}
-
-            <button
-              onClick={handleGoogleLogin}
-              disabled={isLoggingIn}
-              className="w-full bg-white hover:bg-slate-50 focus:ring-4 focus:ring-blue-100 border-2 border-slate-200 text-slate-700 font-bold py-4 px-4 rounded-xl flex items-center justify-center transition-all shadow-sm hover:shadow-md disabled:opacity-70 disabled:cursor-not-allowed group"
-            >
-              {isLoggingIn ? (
-                <Loader2 className="w-6 h-6 animate-spin text-blue-600" />
-              ) : (
-                <>
-                  <img src="https://img.icons8.com/color/48/google-logo.png" alt="google-logo" className="w-6 h-6 mr-3 group-hover:scale-110 transition-transform"/>
-                  Masuk dengan Google
-                </>
-              )}
-            </button>
-
-            <div className="mt-8 pt-8 border-t border-slate-100 flex items-center justify-center space-x-2 text-sm font-medium text-slate-400">
-              <ShieldCheck className="w-5 h-5 text-green-500" />
-              <span>Sistem Akses Terenkripsi & Aman</span>
+              <span className="text-2xl font-extrabold tracking-tight text-slate-800">EduQuest<span className="text-blue-600">.ai</span></span>
             </div>
-          </div>
-          
-          {/* Footer Khusus Mobile */}
-          <div className="lg:hidden text-center text-slate-400 text-xs font-medium mt-10 mb-4">
-             © {new Date().getFullYear()} EduQuest.ai
+            
+            <h2 className="text-2xl sm:text-3xl font-extrabold text-slate-900 mb-2">Selamat Datang</h2>
+            <p className="text-slate-500 text-sm font-medium">Masuk untuk melanjutkan ke dasbor Anda.</p>
           </div>
 
+          {errorMsg && (
+            <div className="mb-6 bg-red-50/80 border border-red-200 text-red-600 px-4 py-3.5 rounded-2xl flex items-start text-left text-sm font-medium animate-in slide-in-from-top-2">
+              <AlertCircle className="w-5 h-5 mr-3 shrink-0 mt-0.5" />
+              <span className="leading-relaxed">{errorMsg}</span>
+            </div>
+          )}
+
+          {/* Form Email & Password (UI Modern) */}
+          <form onSubmit={handleEmailLogin} className="space-y-5 mb-8">
+            <div className="space-y-1.5">
+              <label className="text-sm font-bold text-slate-700 ml-1">Email Belajar.id</label>
+              <div className="relative flex items-center bg-slate-50 border border-slate-200 rounded-2xl px-4 py-3.5 focus-within:ring-4 focus-within:ring-blue-500/20 focus-within:border-blue-500 transition-all group">
+                <Mail className="w-5 h-5 text-slate-400 group-focus-within:text-blue-500 transition-colors" />
+                <input 
+                  type="email" 
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  placeholder="nama@guru.sd.belajar.id" 
+                  className="w-full bg-transparent outline-none ml-3 text-sm text-slate-800 placeholder-slate-400 font-medium"
+                />
+              </div>
+            </div>
+
+            <div className="space-y-1.5">
+              <label className="text-sm font-bold text-slate-700 ml-1">Kata Sandi</label>
+              <div className="relative flex items-center bg-slate-50 border border-slate-200 rounded-2xl px-4 py-3.5 focus-within:ring-4 focus-within:ring-blue-500/20 focus-within:border-blue-500 transition-all group">
+                <Lock className="w-5 h-5 text-slate-400 group-focus-within:text-blue-500 transition-colors" />
+                <input 
+                  type={showPassword ? "text" : "password"} 
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  placeholder="••••••••" 
+                  className="w-full bg-transparent outline-none ml-3 text-sm text-slate-800 placeholder-slate-400 font-medium"
+                />
+                <button 
+                  type="button" 
+                  onClick={() => setShowPassword(!showPassword)}
+                  className="text-slate-400 hover:text-slate-600 focus:outline-none transition-colors ml-2"
+                >
+                  {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
+                </button>
+              </div>
+            </div>
+
+            <button type="submit" className="w-full bg-slate-900 hover:bg-slate-800 text-white font-bold py-3.5 px-4 rounded-2xl transition-all shadow-lg shadow-slate-900/20 flex items-center justify-center group">
+              Masuk
+              <ArrowRight className="w-4 h-4 ml-2 group-hover:translate-x-1 transition-transform" />
+            </button>
+          </form>
+
+          {/* Garis Pemisah */}
+          <div className="flex items-center justify-between mb-8">
+            <div className="w-full h-[1px] bg-slate-200"></div>
+            <span className="px-4 text-xs font-bold text-slate-400 uppercase tracking-wider">Atau</span>
+            <div className="w-full h-[1px] bg-slate-200"></div>
+          </div>
+
+          {/* Tombol Login Google (Primary Action Sebenarnya) */}
+          <button
+            onClick={handleGoogleLogin}
+            disabled={isLoggingIn}
+            className="w-full bg-white hover:bg-slate-50 focus:ring-4 focus:ring-blue-500/20 border-2 border-slate-200 text-slate-700 font-bold py-3.5 px-4 rounded-2xl flex items-center justify-center transition-all hover:border-slate-300 disabled:opacity-70 disabled:cursor-not-allowed group shadow-sm"
+          >
+            {isLoggingIn ? (
+              <Loader2 className="w-6 h-6 animate-spin text-blue-600" />
+            ) : (
+              <>
+                <img src="https://img.icons8.com/color/48/google-logo.png" alt="Google" className="w-6 h-6 mr-3 group-hover:scale-110 transition-transform"/>
+                <span className="text-sm">Lanjutkan dengan Google</span>
+              </>
+            )}
+          </button>
+
+          {/* Footer Mobile dalam Card */}
+          <p className="text-center text-xs text-slate-400 font-medium mt-8 leading-relaxed">
+            Hanya dapat diakses oleh Admin atau tenaga pendidik menggunakan domain <b>@belajar.id</b>.
+          </p>
         </div>
       </div>
     </div>
