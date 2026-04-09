@@ -62,7 +62,7 @@ export default function LoginPage() {
   }
 
   return (
-    <div className="min-h-screen flex bg-slate-50 font-sans">
+    <div className="min-h-screen flex bg-slate-50 font-sans relative">
       
       {/* KIRI - Tampilan Branding (Hanya muncul di Desktop) */}
       <div className="hidden lg:flex lg:w-1/2 bg-blue-600 p-12 flex-col justify-between relative overflow-hidden">
@@ -112,19 +112,34 @@ export default function LoginPage() {
          </div>
       </div>
 
-      {/* KANAN - Kotak Login */}
-      <div className="w-full lg:w-1/2 flex items-center justify-center p-6 sm:p-12 relative">
-        {/* Dekorasi Mobile */}
-        <div className="absolute top-0 right-0 w-full h-64 bg-blue-600 lg:hidden rounded-b-[40px] -z-10"></div>
+      {/* Latar Belakang Khusus Mobile */}
+      <div className="absolute top-0 inset-x-0 w-full h-[55vh] bg-gradient-to-b from-blue-700 to-blue-500 lg:hidden rounded-b-[3rem] shadow-lg -z-10 overflow-hidden">
+        {/* Ornamen Cahaya di Mobile */}
+        <div className="absolute top-4 -left-10 w-40 h-40 bg-white/10 rounded-full blur-3xl"></div>
+        <div className="absolute bottom-10 -right-10 w-48 h-48 bg-indigo-400/40 rounded-full blur-3xl"></div>
+      </div>
 
-        <div className="w-full max-w-md animate-in fade-in slide-in-from-bottom-8">
+      {/* KANAN - Area Konten Login */}
+      <div className="w-full lg:w-1/2 flex flex-col justify-center p-4 sm:p-8 lg:p-12 relative min-h-screen lg:min-h-0">
+        
+        <div className="w-full max-w-md mx-auto animate-in fade-in slide-in-from-bottom-8">
           
-          <div className="lg:hidden flex items-center justify-center space-x-2 text-white mb-10">
-             <Wand2 className="w-10 h-10" />
-             <span className="text-3xl font-bold tracking-tight">EduQuest<span className="text-blue-200">.ai</span></span>
+          {/* Header/Branding Khusus Mobile */}
+          <div className="lg:hidden flex flex-col items-center justify-center text-white mb-8 mt-4 sm:mt-0">
+             <div className="flex items-center space-x-3 mb-4">
+               <div className="bg-white/20 p-2.5 rounded-2xl backdrop-blur-md border border-white/20 shadow-inner">
+                 <Wand2 className="w-8 h-8 text-white" />
+               </div>
+               <span className="text-4xl font-extrabold tracking-tight">EduQuest<span className="text-blue-200">.ai</span></span>
+             </div>
+             <p className="text-blue-50 text-center text-sm sm:text-base px-6 max-w-xs leading-relaxed font-medium">
+               Asisten AI cerdas pembuat soal ujian & ilustrasi khusus Guru SD.
+             </p>
           </div>
 
-          <div className="bg-white rounded-[2rem] shadow-2xl shadow-blue-900/5 border border-slate-100 p-8 sm:p-10 text-center relative overflow-hidden">
+          {/* Kotak Putih Login */}
+          <div className="bg-white rounded-[2rem] shadow-2xl shadow-blue-900/10 border border-slate-100 p-8 sm:p-10 text-center relative overflow-hidden">
+            {/* Garis Warna di Atas Kartu */}
             <div className="absolute top-0 left-0 w-full h-1.5 bg-gradient-to-r from-blue-500 to-indigo-600"></div>
 
             <h2 className="text-2xl sm:text-3xl font-extrabold text-slate-800 mb-2 mt-2">Selamat Datang</h2>
@@ -157,6 +172,12 @@ export default function LoginPage() {
               <span>Sistem Akses Terenkripsi & Aman</span>
             </div>
           </div>
+          
+          {/* Footer Khusus Mobile */}
+          <div className="lg:hidden text-center text-slate-400 text-xs font-medium mt-10 mb-4">
+             © {new Date().getFullYear()} EduQuest.ai
+          </div>
+
         </div>
       </div>
     </div>
