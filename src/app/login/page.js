@@ -146,7 +146,7 @@ export default function LoginPage() {
                 <Loader2 className="w-6 h-6 animate-spin text-blue-600" />
               ) : (
                 <>
-                  <img src="https://upload.wikimedia.org/wikipedia/commons/5/53/Google_%22G%22_Logo.svg" alt="G" className="w-6 h-6 mr-3 group-hover:scale-110 transition-transform"/>
+                  <img src="https://img.icons8.com/color/48/google-logo.png" alt="google-logo" className="w-6 h-6 mr-3 group-hover:scale-110 transition-transform"/>
                   Masuk dengan Google
                 </>
               )}
