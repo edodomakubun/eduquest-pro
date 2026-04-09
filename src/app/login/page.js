@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { BookOpen, Sparkles, Clock, ShieldCheck, Loader2, AlertCircle, Wand2, Mail, Lock, Eye, EyeOff, ArrowRight } from 'lucide-react';
+import { BookOpen, Sparkles, Clock, ShieldCheck, Loader2, AlertCircle, Wand2, Mail, Lock, Eye, EyeOff, ArrowRight, Globe, Facebook } from 'lucide-react';
 import { auth, googleProvider } from '../../lib/firebase';
 import { signInWithPopup, onAuthStateChanged, signOut } from 'firebase/auth';
 
@@ -62,15 +62,12 @@ export default function LoginPage() {
     }
   };
 
-  // Handler dummy untuk form email (karena backend menggunakan Google Auth)
   const handleEmailLogin = (e) => {
     e.preventDefault();
     if (!email || !password) {
       setErrorMsg("Harap masukkan email dan password.");
       return;
     }
-    // Jika Anda ingin mengaktifkan Email/Password Auth, logikanya diletakkan di sini.
-    // Saat ini kita menampilkan pesan error edukatif.
     setErrorMsg("Login via Email dinonaktifkan. Silakan gunakan tombol Masuk dengan Google (Akun Belajar.id).");
   };
 
@@ -87,7 +84,6 @@ export default function LoginPage() {
     <div className="min-h-screen w-full flex flex-col lg:flex-row font-sans relative overflow-hidden bg-slate-900 lg:bg-white">
       
       {/* BACKGROUND MOBILE (Dark Gradient) */}
-      {/* Latar belakang gelap ini hanya muncul di mobile, memastikan kontras super tinggi dengan form putih di tengahnya */}
       <div className="absolute inset-0 lg:hidden bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-blue-900 via-slate-900 to-black z-0">
         <div className="absolute top-20 -left-20 w-72 h-72 bg-blue-600/20 rounded-full blur-3xl"></div>
         <div className="absolute bottom-10 -right-10 w-64 h-64 bg-indigo-600/20 rounded-full blur-3xl"></div>
@@ -99,7 +95,6 @@ export default function LoginPage() {
          <div className="absolute top-0 left-0 w-full h-full overflow-hidden pointer-events-none">
            <div className="absolute -top-32 -left-32 w-[30rem] h-[30rem] bg-blue-500/30 rounded-full mix-blend-overlay filter blur-3xl"></div>
            <div className="absolute top-1/2 -right-20 w-[25rem] h-[25rem] bg-indigo-400/30 rounded-full mix-blend-overlay filter blur-3xl"></div>
-           {/* Grid Pattern Subtle */}
            <div className="absolute inset-0 bg-[url('https://grainy-gradients.vercel.app/noise.svg')] opacity-20 mix-blend-soft-light"></div>
          </div>
 
@@ -147,13 +142,12 @@ export default function LoginPage() {
          </div>
       </div>
 
-      {/* KANAN - Area Konten Login (Tengah pada Mobile) */}
-      <div className="w-full lg:w-[55%] xl:w-1/2 flex items-center justify-center p-4 sm:p-8 relative z-10 min-h-screen lg:min-h-0">
+      {/* KANAN - Area Konten Login */}
+      <div className="w-full lg:w-[55%] xl:w-1/2 flex flex-col items-center justify-center p-4 sm:p-8 relative z-10 min-h-screen lg:min-h-0">
         
         {/* Kontainer Form Login */}
-        <div className="w-full max-w-[420px] bg-white rounded-[2.5rem] shadow-2xl border border-slate-100 p-8 sm:p-10 animate-in fade-in slide-in-from-bottom-8">
+        <div className="w-full max-w-[420px] bg-white rounded-[2.5rem] shadow-2xl border border-slate-100 p-8 sm:p-10 animate-in fade-in slide-in-from-bottom-8 relative z-20">
           
-          {/* Header Card Login */}
           <div className="text-center mb-8">
             <div className="lg:hidden flex items-center justify-center space-x-2 text-blue-600 mb-6">
               <div className="bg-blue-50 p-2.5 rounded-xl border border-blue-100">
@@ -173,7 +167,6 @@ export default function LoginPage() {
             </div>
           )}
 
-          {/* Form Email & Password (UI Modern) */}
           <form onSubmit={handleEmailLogin} className="space-y-5 mb-8">
             <div className="space-y-1.5">
               <label className="text-sm font-bold text-slate-700 ml-1">Email Belajar.id</label>
@@ -216,14 +209,12 @@ export default function LoginPage() {
             </button>
           </form>
 
-          {/* Garis Pemisah */}
           <div className="flex items-center justify-between mb-8">
             <div className="w-full h-[1px] bg-slate-200"></div>
             <span className="px-4 text-xs font-bold text-slate-400 uppercase tracking-wider">Atau</span>
             <div className="w-full h-[1px] bg-slate-200"></div>
           </div>
 
-          {/* Tombol Login Google (Primary Action Sebenarnya) */}
           <button
             onClick={handleGoogleLogin}
             disabled={isLoggingIn}
@@ -238,12 +229,34 @@ export default function LoginPage() {
               </>
             )}
           </button>
-
-          {/* Footer Mobile dalam Card */}
-          <p className="text-center text-xs text-slate-400 font-medium mt-8 leading-relaxed">
-            Hanya dapat diakses oleh Admin atau tenaga pendidik menggunakan domain <b>@belajar.id</b>.
-          </p>
         </div>
+
+        {/* LINK PENGEMBANG / FOOTER (Responsif) */}
+        <div className="mt-12 text-center animate-in fade-in slide-in-from-bottom-12 relative z-10">
+          <p className="text-xs font-bold uppercase tracking-widest text-slate-400 lg:text-slate-400 mb-4">Dikembangkan Oleh</p>
+          <div className="flex items-center justify-center space-x-6 sm:space-x-8">
+            <a 
+              href="https://ed-developing.pages.dev" 
+              target="_blank" 
+              rel="noopener noreferrer" 
+              className="flex items-center text-sm font-bold text-slate-300 lg:text-slate-500 hover:text-blue-400 lg:hover:text-blue-600 transition-colors group"
+            >
+              <Globe className="w-4 h-4 mr-2 text-slate-400 lg:text-slate-400 group-hover:text-blue-400 lg:group-hover:text-blue-600 transition-colors" /> 
+              Portofolio
+            </a>
+            <div className="w-1.5 h-1.5 rounded-full bg-slate-600/30 lg:bg-slate-300"></div>
+            <a 
+              href="https://www.facebook.com/dmkbn.e" 
+              target="_blank" 
+              rel="noopener noreferrer" 
+              className="flex items-center text-sm font-bold text-slate-300 lg:text-slate-500 hover:text-blue-400 lg:hover:text-blue-600 transition-colors group"
+            >
+              <Facebook className="w-4 h-4 mr-2 text-slate-400 lg:text-slate-400 group-hover:text-blue-400 lg:group-hover:text-blue-600 transition-colors" /> 
+              Facebook
+            </a>
+          </div>
+        </div>
+
       </div>
     </div>
   );
