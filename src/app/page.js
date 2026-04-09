@@ -1,6 +1,7 @@
 'use client'; 
 
 import React, { useState, useEffect } from 'react';
+import { useRouter } from 'next/navigation';
 import { 
   BookOpen, Upload, Settings, Wand2, Download, ChevronRight, 
   FileText, CheckCircle2, AlertCircle, Loader2, LogOut, 
@@ -8,21 +9,20 @@ import {
 } from 'lucide-react';
 
 // --- Impor Fungsi Eksternal (Modular) ---
-import { auth, db, googleProvider } from '../lib/firebase';
-import { signInWithPopup, onAuthStateChanged, signOut } from 'firebase/auth';
-import { doc, setDoc, onSnapshot, updateDoc, increment, collection, addDoc, query, orderBy } from 'firebase/firestore';
+import { auth, db } from '../lib/firebase';
+import { onAuthStateChanged, signOut } from 'firebase/auth';
+import { doc, setDoc, onSnapshot, updateDoc, increment } from 'firebase/firestore';
 import { analyzeBloomWithAI, callGeminiTextAPI, callImagenAPI } from '../lib/ai';
 import { exportToWord } from '../lib/exportWord';
 
 const appId = 'eduquest-pro';
 
 export default function Home() {
-  const [appState, setAppState] = useState('LOGIN'); // LOGIN, FORM, LOADING, PREVIEW, PAYMENT, ADMIN
+  const router = useRouter(); 
+  const [appState, setAppState] = useState('FORM'); // FORM, LOADING, PREVIEW
   const [user, setUser] = useState(null);
-  const [isAdmin, setIsAdmin] = useState(false);
   const [coins, setCoins] = useState(0);
   const [errorMsg, setErrorMsg] = useState('');
-  const [successMsg, setSuccessMsg] = useState('');
   
   // State Form Generate
   const [formData, setFormData] = useState({
@@ -48,20 +48,6 @@ export default function Home() {
   const [bloomAnalysis, setBloomAnalysis] = useState('');
   const [isAnalyzingBloom, setIsAnalyzingBloom] = useState(false);
   const [isExtracting, setIsExtracting] = useState(false); 
-  const [isAuthLoading, setIsAuthLoading] = useState(false);
-
-  // State Payment (User)
-  const [selectedPackage, setSelectedPackage] = useState(null);
-  const [paymentProofBase64, setPaymentProofBase64] = useState('');
-  const [isSubmittingPayment, setIsSubmittingPayment] = useState(false);
-  const [userPendingTx, setUserPendingTx] = useState(null);
-
-  // State Admin
-  const [adminTab, setAdminTab] = useState('users'); // users, transactions, settings
-  const [allUsers, setAllUsers] = useState([]);
-  const [allTransactions, setAllTransactions] = useState([]);
-  const [qrCodeUrl, setQrCodeUrl] = useState('');
-  const [previewImage, setPreviewImage] = useState(null); // Modal bukti transfer
 
   // --- LOGIKA AUTHENTICATION ---
   useEffect(() => {
@@ -69,32 +55,24 @@ export default function Home() {
       if (currentUser) {
         const email = currentUser.email || '';
         
-        // Mengecek apakah yang login adalah Admin yang ditentukan
-        const isUserAdmin = email === 'operator.sdinpresleling2023@gmail.com';
-        
-        if (email.endsWith('@guru.sd.belajar.id') || isUserAdmin) {
+        if (email === 'operator.sdinpresleling2023@gmail.com') {
+          router.push('/admin');
+        } else if (email.endsWith('@guru.sd.belajar.id')) {
           setUser({ uid: currentUser.uid, name: currentUser.displayName || 'Guru', email: email });
-          setIsAdmin(isUserAdmin);
-          if (isUserAdmin && appState === 'LOGIN') setAppState('ADMIN');
-          else if (appState === 'LOGIN') setAppState('FORM');
         } else {
           await signOut(auth);
-          setUser(null);
-          showError("Akses Ditolak! Hanya untuk akun @guru.sd.belajar.id atau Admin.");
+          router.push('/login');
         }
       } else {
-        setUser(null);
-        setIsAdmin(false);
+        router.push('/login');
       }
     });
     return () => unsubscribe();
-  }, [appState]);
+  }, [router]);
 
   // --- LOGIKA DATABASE REALTIME ---
   useEffect(() => {
     if (!user) return;
-
-    // 1. Data User Pribadi (Koin)
     const userDocRef = doc(db, 'artifacts', appId, 'public', 'data', 'profiles', user.uid);
     const unsubUser = onSnapshot(userDocRef, (docSnap) => {
       if (docSnap.exists()) {
@@ -104,168 +82,26 @@ export default function Home() {
         setCoins(20);
       }
     }, (error) => console.error(error));
-
-    // 2. Data QR Code Global
-    const settingsRef = doc(db, 'artifacts', appId, 'public', 'data', 'settings', 'global');
-    const unsubSettings = onSnapshot(settingsRef, (docSnap) => {
-      if (docSnap.exists()) setQrCodeUrl(docSnap.data().qrCodeImage || '');
-    });
-
-    // 3. Data Transaksi User Pribadi (Cek apakah ada yang pending)
-    const txColRef = collection(db, 'artifacts', appId, 'public', 'data', 'transactions');
-    const unsubTxUser = onSnapshot(txColRef, (snapshot) => {
-      const myPending = snapshot.docs.map(d => ({id: d.id, ...d.data()})).find(tx => tx.uid === user.uid && tx.status === 'pending');
-      setUserPendingTx(myPending || null);
-    });
-
-    return () => { unsubUser(); unsubSettings(); unsubTxUser(); };
+    return () => unsubUser();
   }, [user]);
-
-  // --- LOGIKA DATABASE ADMIN (Realtime Semua User & Transaksi) ---
-  useEffect(() => {
-    if (!isAdmin) return;
-    
-    const usersColRef = collection(db, 'artifacts', appId, 'public', 'data', 'profiles');
-    const unsubUsers = onSnapshot(usersColRef, (snapshot) => {
-      setAllUsers(snapshot.docs.map(d => ({ id: d.id, ...d.data() })));
-    });
-
-    const txColRef = collection(db, 'artifacts', appId, 'public', 'data', 'transactions');
-    const unsubAllTx = onSnapshot(txColRef, (snapshot) => {
-      setAllTransactions(snapshot.docs.map(d => ({ id: d.id, ...d.data() })).sort((a,b) => new Date(b.createdAt) - new Date(a.createdAt)));
-    });
-
-    return () => { unsubUsers(); unsubAllTx(); };
-  }, [isAdmin]);
-
-  // --- HELPER COMPRESSION GAMBAR (Base64 Aman untuk Firebase) ---
-  const handleImageToAPI = (file, callback) => {
-    const reader = new FileReader();
-    reader.onload = (e) => {
-      const img = new Image();
-      img.onload = () => {
-        const canvas = document.createElement('canvas');
-        const MAX_WIDTH = 800;
-        let scaleSize = 1;
-        if (img.width > MAX_WIDTH) scaleSize = MAX_WIDTH / img.width;
-        canvas.width = img.width * scaleSize;
-        canvas.height = img.height * scaleSize;
-        const ctx = canvas.getContext('2d');
-        ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
-        callback(canvas.toDataURL('image/jpeg', 0.6));
-      };
-      img.src = e.target.result;
-    };
-    reader.readAsDataURL(file);
-  };
-
-  // --- HANDLER LOGIN & LOGOUT ---
-  const handleGoogleLogin = async () => {
-    setIsAuthLoading(true);
-    try {
-      const result = await signInWithPopup(auth, googleProvider);
-      const email = result.user.email || '';
-      
-      // Validasi saat popup Google selesai
-      if (email.endsWith('@guru.sd.belajar.id') || email === 'operator.sdinpresleling2023@gmail.com') {
-        setAppState('FORM');
-      } else {
-        await signOut(auth);
-        showError("Akses Ditolak! Gunakan akun Belajar.id atau email Admin.");
-      }
-    } catch (err) {
-      if (err.code !== 'auth/popup-closed-by-user' && err.code !== 'auth/cancelled-popup-request') showError("Terjadi kesalahan: " + err.message);
-    } finally {
-      setIsAuthLoading(false);
-    }
-  };
 
   const handleLogout = async () => {
     await signOut(auth);
-    setAppState('LOGIN');
+    router.push('/login');
   };
 
   const showError = (msg) => { setErrorMsg(msg); setTimeout(() => setErrorMsg(''), 5000); };
-  const showSuccess = (msg) => { setSuccessMsg(msg); setTimeout(() => setSuccessMsg(''), 5000); };
 
-  // --- LOGIKA PEMBAYARAN (USER) ---
-  const submitPaymentProof = async () => {
-    if (!paymentProofBase64) return showError('Harap unggah bukti transfer!');
-    setIsSubmittingPayment(true);
-    try {
-      const txRef = collection(db, 'artifacts', appId, 'public', 'data', 'transactions');
-      await addDoc(txRef, {
-        uid: user.uid,
-        userName: user.name,
-        userEmail: user.email,
-        packageName: selectedPackage.name,
-        coinsToAdd: selectedPackage.coins,
-        price: selectedPackage.price,
-        proofImage: paymentProofBase64,
-        status: 'pending',
-        createdAt: new Date().toISOString()
-      });
-      setSelectedPackage(null);
-      setPaymentProofBase64('');
-      showSuccess('Bukti terkirim! Menunggu verifikasi admin.');
-    } catch (error) {
-      showError('Gagal mengirim bukti: ' + error.message);
-    } finally {
-      setIsSubmittingPayment(false);
-    }
-  };
-
-  const downloadQR = () => {
-    if (!qrCodeUrl) return;
-    const link = document.createElement('a');
-    link.href = qrCodeUrl;
-    link.download = 'QR_Pembayaran_EduQuest.jpg';
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-  };
-
-  // --- LOGIKA ADMIN ---
-  const handleUploadAdminQR = async (e) => {
-    const file = e.target.files[0];
-    if (!file) return;
-    handleImageToAPI(file, async (base64) => {
-      try {
-        const settingsRef = doc(db, 'artifacts', appId, 'public', 'data', 'settings', 'global');
-        await setDoc(settingsRef, { qrCodeImage: base64 }, { merge: true });
-        showSuccess('QR Code berhasil diperbarui!');
-      } catch (err) {
-        showError('Gagal update QR Code.');
-      }
-    });
-  };
-
-  const approveTransaction = async (tx) => {
-    try {
-      // 1. Tambah Koin User
-      const userRef = doc(db, 'artifacts', appId, 'public', 'data', 'profiles', tx.uid);
-      await updateDoc(userRef, { coins: increment(tx.coinsToAdd) });
-      // 2. Ubah Status Transaksi
-      const txRef = doc(db, 'artifacts', appId, 'public', 'data', 'transactions', tx.id);
-      await updateDoc(txRef, { status: 'approved', approvedAt: new Date().toISOString() });
-      showSuccess(`Berhasil menyetujui ${tx.packageName} untuk ${tx.userName}`);
-    } catch (error) {
-      showError('Gagal menyetujui: ' + error.message);
-    }
-  };
-
-  // --- LOGIKA GENERATE SOAL (DEDUCT KOIN FINAL) ---
+  // --- LOGIKA GENERATE SOAL ---
   const generateQuestions = async () => {
     if (!formData.rppText.trim()) return showError('Isi materi RPP terlebih dahulu.');
     if (formData.questionTypes.filter(t => t.checked && t.count > 0).length === 0) return showError('Pilih setidaknya satu jenis soal.');
     
-    // ATURAN: 10 Koin per Generate
     if (coins < 10) {
-      setAppState('PAYMENT');
+      router.push('/payment'); 
       return;
     }
 
-    // ATURAN: POTONG KOIN DI AWAL
     try {
       const userDocRef = doc(db, 'artifacts', appId, 'public', 'data', 'profiles', user.uid);
       await updateDoc(userDocRef, { coins: increment(-10) });
@@ -295,14 +131,12 @@ export default function Home() {
       setQuestions(questionsWithImages);
       setAppState('PREVIEW');
     } catch (err) {
-      // Jika error, koin tetap terpotong sesuai aturan finalitas.
       showError('Gagal membuat soal: ' + err.message);
       setAppState('FORM'); 
     }
   };
 
   // --- FILE UPLOAD RPP (PDF/TXT) & BLOOM AI ---
-  // (Sama seperti versi sebelumnya)
   useEffect(() => {
     if (!document.getElementById('pdfjs-script')) {
       const script = document.createElement('script');
@@ -351,49 +185,31 @@ export default function Home() {
     return () => clearTimeout(timeoutId);
   }, [JSON.stringify(formData.bloomLevels), formData.grade, formData.subject, formData.examType, formData.rppText, appState]);
 
+  if (!user) return <div className="min-h-screen flex items-center justify-center bg-slate-50"><Loader2 className="w-8 h-8 animate-spin text-blue-600"/></div>;
+
   return (
     <div className="min-h-screen bg-slate-50 text-slate-900 font-sans">
-      
-      {/* Toast Messages */}
       {errorMsg && (
         <div className="fixed top-4 right-4 z-50 bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded shadow-lg flex items-center space-x-2 animate-in fade-in">
           <AlertCircle size={20} /> <span className="font-medium text-sm">{errorMsg}</span>
-        </div>
-      )}
-      {successMsg && (
-        <div className="fixed top-4 right-4 z-50 bg-green-100 border border-green-400 text-green-700 px-4 py-3 rounded shadow-lg flex items-center space-x-2 animate-in fade-in">
-          <CheckCircle2 size={20} /> <span className="font-medium text-sm">{successMsg}</span>
-        </div>
-      )}
-
-      {/* Modal Image Preview (Admin) */}
-      {previewImage && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4" onClick={() => setPreviewImage(null)}>
-          <img src={previewImage} alt="Bukti Pembayaran" className="max-w-full max-h-full rounded-xl" />
         </div>
       )}
 
       {/* HEADER */}
       <header className="bg-white border-b border-slate-200 sticky top-0 z-40 shadow-sm">
         <div className="max-w-6xl mx-auto px-4 h-16 flex items-center justify-between">
-          <div className="flex items-center space-x-2 text-blue-600 cursor-pointer" onClick={() => { if(user && !isAdmin) setAppState('FORM') }}>
+          <div className="flex items-center space-x-2 text-blue-600 cursor-pointer" onClick={() => { if(user) setAppState('FORM') }}>
             <Wand2 className="w-8 h-8" />
             <span className="text-xl font-bold tracking-tight hidden sm:block">EduQuest<span className="text-slate-800">.ai</span></span>
           </div>
           {user && (
             <div className="flex items-center space-x-3 sm:space-x-6">
-              {isAdmin ? (
-                <div className="flex items-center text-indigo-700 bg-indigo-50 px-3 py-1.5 rounded-lg border border-indigo-200 font-semibold text-sm">
-                  <ShieldCheck className="w-4 h-4 mr-2" /> Mode Admin Aktif
-                </div>
-              ) : (
-                <div className="flex items-center bg-amber-50 border border-amber-200 px-3 py-1.5 rounded-full">
-                  <Coins className="w-4 h-4 text-amber-500 mr-2" />
-                  <span className="text-sm font-bold text-amber-700 mr-2">{coins}</span>
-                  <span className="text-xs text-amber-600 hidden sm:inline-block">Koin</span>
-                  <button onClick={() => setAppState('PAYMENT')} className="ml-3 text-xs bg-amber-500 hover:bg-amber-600 text-white px-2 py-0.5 rounded">+ Top Up</button>
-                </div>
-              )}
+              <div className="flex items-center bg-amber-50 border border-amber-200 px-3 py-1.5 rounded-full">
+                <Coins className="w-4 h-4 text-amber-500 mr-2" />
+                <span className="text-sm font-bold text-amber-700 mr-2">{coins}</span>
+                <span className="text-xs text-amber-600 hidden sm:inline-block">Koin</span>
+                <button onClick={() => router.push('/payment')} className="ml-3 text-xs bg-amber-500 hover:bg-amber-600 text-white px-2 py-0.5 rounded transition-colors">+ Top Up</button>
+              </div>
               <span className="text-sm font-medium text-slate-600 hidden md:inline-block">{user.name}</span>
               <button onClick={handleLogout} className="text-slate-500 hover:text-slate-800 flex items-center text-sm font-medium transition-colors">
                 <LogOut className="w-4 h-4 sm:mr-1" /> <span className="hidden sm:inline-block">Keluar</span>
@@ -405,173 +221,9 @@ export default function Home() {
 
       <main className="max-w-6xl mx-auto px-4 py-8">
         
-        {/* LOGIN STATE */}
-        {appState === 'LOGIN' && (
-          <div className="max-w-md mx-auto mt-16 bg-white rounded-3xl shadow-sm border border-slate-200 p-8 text-center animate-in fade-in slide-in-from-bottom-4">
-            <div className="w-16 h-16 bg-blue-100 text-blue-600 rounded-full flex items-center justify-center mx-auto mb-4"><BookOpen className="w-8 h-8" /></div>
-            <h1 className="text-2xl font-bold text-slate-800 mb-1">EduQuest Pro</h1>
-            <p className="text-sm text-slate-500 mb-6">Platform AI pembuat soal ujian otomatis Guru SD.</p>
-            <div className="bg-blue-50 border border-blue-100 text-blue-800 text-xs p-3 rounded-lg mb-6 text-center">Gunakan akun <b>@guru.sd.belajar.id</b> atau <b>Email Admin</b></div>
-            <button onClick={handleGoogleLogin} disabled={isAuthLoading} className="w-full bg-white hover:bg-slate-50 border border-slate-300 text-slate-700 font-medium py-3 px-4 rounded-xl flex items-center justify-center shadow-sm">
-              {isAuthLoading ? <Loader2 className="w-5 h-5 animate-spin text-blue-600" /> : <><img src="https://upload.wikimedia.org/wikipedia/commons/5/53/Google_%22G%22_Logo.svg" alt="G" className="w-5 h-5 mr-3"/> Masuk dengan Google</>}
-            </button>
-          </div>
-        )}
-
-        {/* PAYMENT & TOPUP STATE (USER) */}
-        {appState === 'PAYMENT' && !isAdmin && (
-          <div className="max-w-3xl mx-auto space-y-6 animate-in fade-in">
-            <div className="flex items-center justify-between mb-4">
-              <h1 className="text-2xl font-bold text-slate-800 flex items-center"><CreditCard className="w-6 h-6 mr-2 text-blue-600" /> Beli Koin</h1>
-              <button onClick={() => setAppState('FORM')} className="text-slate-500 hover:text-slate-800 text-sm">Kembali ke Beranda</button>
-            </div>
-
-            {userPendingTx ? (
-              <div className="bg-amber-50 border-2 border-amber-200 rounded-2xl p-8 text-center">
-                <Loader2 className="w-12 h-12 text-amber-500 animate-spin mx-auto mb-4" />
-                <h3 className="text-xl font-bold text-amber-800 mb-2">Pembayaran Sedang Diproses</h3>
-                <p className="text-amber-700">Mohon tunggu sejenak, pembayaran paket <b>{userPendingTx.packageName}</b> Anda sedang dalam proses verifikasi oleh Admin.</p>
-              </div>
-            ) : !selectedPackage ? (
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                {[
-                  { name: 'Paket Basic', coins: 100, generate: 10, price: 20000, color: 'blue' },
-                  { name: 'Paket Basic+', coins: 150, generate: 15, price: 28000, color: 'indigo' },
-                  { name: 'Paket Premium', coins: 200, generate: 20, price: 35000, color: 'purple' }
-                ].map(pkg => (
-                  <div key={pkg.name} className={`bg-white rounded-2xl p-6 border-2 border-${pkg.color}-100 hover:border-${pkg.color}-500 shadow-sm cursor-pointer transition-all hover:shadow-md flex flex-col`} onClick={() => setSelectedPackage(pkg)}>
-                    <h3 className={`text-xl font-bold text-${pkg.color}-700 mb-1`}>{pkg.name}</h3>
-                    <div className="text-3xl font-black text-slate-800 mb-4 flex items-center"><Coins className="w-6 h-6 mr-2 text-amber-500"/> {pkg.coins} <span className="text-sm font-medium text-slate-500 ml-2">Koin</span></div>
-                    <ul className="text-sm text-slate-600 mb-6 flex-grow space-y-2">
-                      <li className="flex items-center"><Check className="w-4 h-4 mr-2 text-green-500"/> Bisa untuk {pkg.generate}x Generate</li>
-                      <li className="flex items-center"><Check className="w-4 h-4 mr-2 text-green-500"/> (Biaya 10 Koin / generate)</li>
-                      <li className="flex items-center"><Check className="w-4 h-4 mr-2 text-green-500"/> Ilustrasi AI Kualitas Tinggi</li>
-                    </ul>
-                    <div className={`w-full text-center bg-${pkg.color}-50 text-${pkg.color}-700 font-bold py-3 rounded-xl`}>Rp {pkg.price.toLocaleString('id-ID')}</div>
-                  </div>
-                ))}
-              </div>
-            ) : (
-              <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-8 flex flex-col md:flex-row gap-8">
-                <div className="flex-1 text-center md:text-left border-b md:border-b-0 md:border-r border-slate-200 pb-8 md:pb-0 md:pr-8">
-                  <h3 className="text-xl font-bold text-slate-800 mb-2">Selesaikan Pembayaran</h3>
-                  <p className="text-slate-600 text-sm mb-6">Anda memilih <b>{selectedPackage.name} ({selectedPackage.coins} Koin)</b> seharga <b>Rp {selectedPackage.price.toLocaleString('id-ID')}</b>. Silakan scan QRIS di bawah ini.</p>
-                  
-                  <div className="bg-slate-50 p-4 rounded-xl border border-slate-200 inline-block mb-4 mx-auto md:mx-0">
-                    {qrCodeUrl ? <img src={qrCodeUrl} alt="QRIS" className="w-48 h-48 object-cover rounded shadow-sm" /> : <div className="w-48 h-48 bg-slate-200 flex items-center justify-center text-sm text-slate-500 rounded">Belum ada QR Code dari Admin</div>}
-                  </div>
-                  <br />
-                  <button onClick={downloadQR} disabled={!qrCodeUrl} className="bg-slate-100 hover:bg-slate-200 text-slate-700 font-medium py-2 px-4 rounded-lg text-sm flex items-center justify-center mx-auto md:mx-0 transition-colors">
-                    <Download className="w-4 h-4 mr-2" /> Unduh QR Code
-                  </button>
-                </div>
-                
-                <div className="flex-1 flex flex-col justify-center">
-                  <h3 className="text-lg font-bold text-slate-800 mb-4">Konfirmasi Transfer</h3>
-                  <label className="border-2 border-dashed border-slate-300 rounded-xl p-6 flex flex-col items-center justify-center text-slate-500 cursor-pointer hover:bg-slate-50 transition-colors mb-4">
-                    <ImageIcon className="w-8 h-8 mb-2 text-slate-400" />
-                    <span className="text-sm text-center">{paymentProofBase64 ? "Bukti Terlampir (Klik untuk mengganti)" : "Unggah Screenshot Bukti Transfer"}</span>
-                    <input type="file" accept="image/*" className="hidden" onChange={(e) => { if(e.target.files[0]) handleImageToAPI(e.target.files[0], setPaymentProofBase64) }} />
-                  </label>
-                  {paymentProofBase64 && <img src={paymentProofBase64} alt="Preview" className="h-20 object-contain mb-4 rounded border" />}
-                  
-                  <button onClick={submitPaymentProof} disabled={isSubmittingPayment || !paymentProofBase64} className="w-full bg-blue-600 hover:bg-blue-700 disabled:bg-blue-300 text-white font-medium py-3 rounded-xl shadow-sm flex items-center justify-center transition-all">
-                    {isSubmittingPayment ? <Loader2 className="w-5 h-5 mr-2 animate-spin" /> : 'Kirim Bukti Pembayaran'}
-                  </button>
-                  <button onClick={() => setSelectedPackage(null)} className="w-full text-slate-500 hover:text-slate-700 text-sm mt-3 font-medium">Batal & Pilih Paket Lain</button>
-                </div>
-              </div>
-            )}
-          </div>
-        )}
-
-        {/* DASHBOARD ADMIN */}
-        {appState === 'ADMIN' && isAdmin && (
-          <div className="space-y-6 animate-in fade-in">
-            <div className="flex space-x-2 border-b border-slate-200">
-              {[{ id: 'users', label: 'Data User', icon: Users }, { id: 'transactions', label: 'Verifikasi Pembayaran', icon: ShieldCheck }, { id: 'settings', label: 'Pengaturan QR', icon: Settings }].map(tab => (
-                <button key={tab.id} onClick={() => setAdminTab(tab.id)} className={`px-4 py-3 text-sm font-medium border-b-2 transition-colors flex items-center ${adminTab === tab.id ? 'border-blue-600 text-blue-600' : 'border-transparent text-slate-500 hover:text-slate-800'}`}>
-                  <tab.icon className="w-4 h-4 mr-2" /> {tab.label}
-                </button>
-              ))}
-            </div>
-
-            {/* TAB: DATA USER */}
-            {adminTab === 'users' && (
-              <div className="bg-white border rounded-xl shadow-sm overflow-hidden">
-                <div className="p-4 bg-slate-50 border-b font-bold text-slate-700 flex justify-between"><span>Daftar Guru / Pengguna</span> <span>Total: {allUsers.length}</span></div>
-                <div className="overflow-x-auto">
-                  <table className="w-full text-left text-sm">
-                    <thead className="bg-slate-100 text-slate-600"><tr><th className="p-4">Nama</th><th className="p-4">Email</th><th className="p-4">Sisa Koin</th><th className="p-4">Mendaftar</th></tr></thead>
-                    <tbody>
-                      {allUsers.map((u, i) => (
-                        <tr key={i} className="border-b hover:bg-slate-50">
-                          <td className="p-4 font-medium">{u.name}</td><td className="p-4 text-slate-500">{u.email}</td>
-                          <td className="p-4 font-bold text-amber-600">{u.coins}</td>
-                          <td className="p-4 text-slate-400 text-xs">{new Date(u.createdAt).toLocaleDateString('id-ID')}</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              </div>
-            )}
-
-            {/* TAB: VERIFIKASI TRANSAKSI */}
-            {adminTab === 'transactions' && (
-              <div className="bg-white border rounded-xl shadow-sm overflow-hidden">
-                <div className="p-4 bg-slate-50 border-b font-bold text-slate-700">Riwayat & Permintaan Pembayaran</div>
-                <div className="overflow-x-auto">
-                  <table className="w-full text-left text-sm">
-                    <thead className="bg-slate-100 text-slate-600"><tr><th className="p-4">User</th><th className="p-4">Paket</th><th className="p-4">Waktu</th><th className="p-4 text-center">Bukti</th><th className="p-4 text-right">Aksi</th></tr></thead>
-                    <tbody>
-                      {allTransactions.length === 0 && <tr><td colSpan="5" className="p-8 text-center text-slate-500">Belum ada transaksi.</td></tr>}
-                      {allTransactions.map((tx) => (
-                        <tr key={tx.id} className="border-b hover:bg-slate-50">
-                          <td className="p-4">
-                            <div className="font-medium">{tx.userName}</div>
-                            <div className="text-xs text-slate-500">{tx.userEmail}</div>
-                          </td>
-                          <td className="p-4 font-bold text-blue-700">{tx.packageName}</td>
-                          <td className="p-4 text-xs text-slate-500">{new Date(tx.createdAt).toLocaleString('id-ID')}</td>
-                          <td className="p-4 text-center">
-                            <button onClick={() => setPreviewImage(tx.proofImage)} className="text-blue-600 hover:underline flex flex-col items-center mx-auto"><ImageIcon className="w-5 h-5 mb-1" /> Lihat</button>
-                          </td>
-                          <td className="p-4 text-right">
-                            {tx.status === 'pending' ? (
-                              <button onClick={() => approveTransaction(tx)} className="bg-green-600 hover:bg-green-700 text-white px-3 py-1.5 rounded-lg font-medium text-xs shadow-sm">Setujui (+{tx.coinsToAdd})</button>
-                            ) : (
-                              <span className="text-xs font-bold text-green-600 bg-green-50 px-2 py-1 rounded">Selesai</span>
-                            )}
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              </div>
-            )}
-
-            {/* TAB: PENGATURAN QR CODE */}
-            {adminTab === 'settings' && (
-              <div className="max-w-md bg-white border rounded-xl shadow-sm p-6">
-                <h3 className="font-bold text-slate-800 mb-4">Ubah QR Code Pembayaran (User)</h3>
-                <div className="bg-slate-50 p-4 border rounded-xl flex justify-center mb-4">
-                  {qrCodeUrl ? <img src={qrCodeUrl} alt="QR Aktif" className="max-w-full h-48 object-cover rounded" /> : <span className="text-slate-400">Belum ada QR Code</span>}
-                </div>
-                <label className="bg-blue-50 border border-blue-200 text-blue-700 font-medium py-2 px-4 rounded-lg flex justify-center cursor-pointer hover:bg-blue-100 transition-colors">
-                  <Upload className="w-4 h-4 mr-2" /> Unggah Gambar QR Baru
-                  <input type="file" accept="image/*" className="hidden" onChange={handleUploadAdminQR} />
-                </label>
-              </div>
-            )}
-          </div>
-        )}
-
         {/* MAIN FORM GENERATE (USER) */}
-        {appState === 'FORM' && !isAdmin && (
+        {appState === 'FORM' && (
            <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-            {/* PARAMETER SOAL */}
             <div className="lg:col-span-1 space-y-6">
               <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-6">
                 <h2 className="text-lg font-bold text-slate-800 mb-4 flex items-center"><Settings className="w-5 h-5 mr-2 text-blue-500" /> Parameter Soal</h2>
@@ -634,7 +286,6 @@ export default function Home() {
               </div>
             </div>
 
-            {/* AREA RPP & GENERATE */}
             <div className="lg:col-span-2 space-y-6">
               <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-6 flex flex-col h-full">
                 <h2 className="text-lg font-bold text-slate-800 mb-2 flex items-center justify-between">
