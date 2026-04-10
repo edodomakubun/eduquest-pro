@@ -147,16 +147,15 @@ export default function GeneratePage() {
 
 // SIMPAN HASIL KE RIWAYAT (HISTORY)
       try {
-        // PERBAIKAN: Jalur database diubah agar sesuai dengan Rules Firebase
         const historyColRef = collection(db, 'artifacts', appId, 'public', 'data', 'history', user.uid, 'saved_exams');
-        
-        await addDoc(historyColRef, {
+          await addDoc(historyColRef, {
           subject: formData.subject,
           grade: formData.grade,
           examType: formData.examType,
           createdAt: new Date().toISOString(),
           questions: questionsWithImages,
-          formData: formData
+          formData: formData, // Materi, Bloom, dan Jenis Soal sudah tersimpan otomatis di sini
+          isPremiumSnapshot: isPremium // <--- TAMBAHAN BARU: Menyimpan status akun saat itu secara statis
         });
       } catch (e) {
         console.error("Gagal menyimpan ke riwayat:", e);

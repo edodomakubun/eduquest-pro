@@ -6,7 +6,7 @@ import Link from 'next/link';
 import { 
   BookOpen, Wand2, Download, LogOut, 
   Coins, ShieldAlert, Clock, Eye, FileText, 
-  CheckCircle2, AlertCircle, Loader2, ChevronLeft
+  CheckCircle2, AlertCircle, Loader2, ChevronLeft, Settings, Zap
 } from 'lucide-react';
 
 import { auth, db } from '../lib/firebase';
@@ -24,7 +24,7 @@ export default function Dashboard() {
   const [errorMsg, setErrorMsg] = useState('');
   
   const [historyData, setHistoryData] = useState([]);
-  const [viewingHistory, setViewingHistory] = useState(null); // State untuk melihat detail soal dari riwayat
+  const [viewingHistory, setViewingHistory] = useState(null); 
 
   // --- LOGIKA AUTHENTICATION ---
   useEffect(() => {
@@ -64,13 +64,10 @@ export default function Dashboard() {
     return () => unsubUser();
   }, [user]);
 
-// --- LOGIKA MENGAMBIL RIWAYAT GENERATE SOAL (HISTORY) ---
+  // --- LOGIKA MENGAMBIL RIWAYAT GENERATE SOAL (HISTORY) ---
   useEffect(() => {
     if (!user) return;
-    
-    // PERBAIKAN: Jalur database diubah agar sesuai dengan Rules Firebase
     const historyColRef = collection(db, 'artifacts', appId, 'public', 'data', 'history', user.uid, 'saved_exams');
-    
     const unsubHistory = onSnapshot(historyColRef, (snapshot) => {
       const docs = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
       docs.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
@@ -100,7 +97,7 @@ export default function Dashboard() {
       {/* HEADER */}
       <header className="bg-white border-b border-slate-200 sticky top-0 z-40 shadow-sm">
         <div className="max-w-6xl mx-auto px-4 h-16 flex items-center justify-between">
-          <Link href="/" className="flex items-center space-x-2 text-blue-600 cursor-pointer">
+          <Link href="/" onClick={() => setViewingHistory(null)} className="flex items-center space-x-2 text-blue-600 cursor-pointer">
             <Wand2 className="w-8 h-8" />
             <span className="text-xl font-bold tracking-tight hidden sm:block">EduQuest<span className="text-slate-800">.ai</span></span>
             {isPremium && <span className="ml-2 bg-gradient-to-r from-amber-400 to-orange-500 text-white text-[10px] font-bold px-2 py-0.5 rounded-full uppercase tracking-wider hidden md:block">Pro</span>}
@@ -128,7 +125,7 @@ export default function Dashboard() {
       <main className="max-w-6xl mx-auto px-4 py-8">
         
         {/* BANNER FREE USER */}
-        {!isPremium && (
+        {!isPremium && !viewingHistory && (
           <div className="bg-gradient-to-r from-amber-100 to-orange-50 border border-amber-200 p-4 sm:p-5 rounded-2xl mb-8 flex flex-col sm:flex-row items-start sm:items-center justify-between shadow-sm animate-in fade-in">
             <div className="flex items-start sm:items-center mb-4 sm:mb-0">
               <ShieldAlert className="w-8 h-8 text-amber-600 mr-3 shrink-0" />
@@ -146,10 +143,11 @@ export default function Dashboard() {
         {/* --- STATE: MELIHAT DETAIL RIWAYAT SOAL --- */}
         {viewingHistory ? (
           <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4">
+            
             <div className="bg-white rounded-2xl shadow-sm border p-4 flex flex-col sm:flex-row items-center justify-between gap-4 sticky top-20 z-30">
               <div className="flex items-center space-x-3 text-slate-700">
                 <CheckCircle2 className="w-6 h-6 text-green-500" />
-                <span className="font-medium">Melihat Riwayat Soal: {viewingHistory.subject} (Kelas {viewingHistory.grade})</span>
+                <span className="font-medium">Melihat Riwayat: {viewingHistory.subject} (Kelas {viewingHistory.grade})</span>
               </div>
               <div className="flex space-x-3 w-full sm:w-auto">
                 <button onClick={() => setViewingHistory(null)} className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg text-sm font-bold flex items-center transition-colors"><ChevronLeft className="w-4 h-4 mr-1"/> Kembali</button>
@@ -157,7 +155,69 @@ export default function Dashboard() {
               </div>
             </div>
 
-            <div className="bg-white rounded-2xl shadow-sm border p-8 sm:p-12">
+            {/* --- PANEL DETAIL KONTEKS (BARU) --- */}
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+              {/* Kolom Kiri: Materi */}
+              <div className="col-span-1 md:col-span-2 bg-white p-6 rounded-2xl border border-slate-200 shadow-sm flex flex-col">
+                <h3 className="font-bold text-slate-800 flex items-center mb-3">
+                  <FileText className="w-5 h-5 mr-2 text-indigo-500"/> Materi Sumber
+                </h3>
+                <div className="bg-slate-50 p-4 rounded-xl border border-slate-100 text-sm text-slate-600 flex-grow max-h-[180px] overflow-y-auto" style={{ whiteSpace: 'pre-wrap' }}>
+                  {viewingHistory.formData?.rppText ? viewingHistory.formData.rppText : <span className="italic text-slate-400">Tidak ada materi sumber yang dicatat.</span>}
+                </div>
+              </div>
+
+              {/* Kolom Kanan: Parameter & Status Akun */}
+              <div className="col-span-1 bg-white p-6 rounded-2xl border border-slate-200 shadow-sm">
+                <h3 className="font-bold text-slate-800 flex items-center mb-4">
+                  <Settings className="w-5 h-5 mr-2 text-slate-500"/> Parameter Pembuatan
+                </h3>
+                
+                <div className="space-y-4">
+                  {/* Taksonomi Bloom */}
+                  <div>
+                    <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider block mb-1.5">Target Taksonomi Bloom</span>
+                    <div className="flex flex-wrap gap-1.5">
+                      {viewingHistory.formData?.bloomLevels?.filter(b => b.checked).length > 0 
+                        ? viewingHistory.formData.bloomLevels.filter(b => b.checked).map(b => (
+                            <span key={b.id} className="bg-blue-50 border border-blue-100 text-blue-700 text-xs font-bold px-2 py-1 rounded-md">{b.id.toUpperCase()}</span>
+                          ))
+                        : <span className="text-xs text-slate-500 italic">Default AI</span>
+                      }
+                    </div>
+                  </div>
+
+                  {/* Jenis Soal */}
+                  <div>
+                    <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider block mb-1.5">Komposisi Soal</span>
+                    <div className="flex flex-wrap gap-1.5">
+                      {viewingHistory.formData?.questionTypes?.filter(t => t.checked && t.count > 0).map(t => (
+                        <span key={t.id} className="bg-green-50 border border-green-100 text-green-700 text-xs font-bold px-2 py-1 rounded-md">
+                          {t.label} ({t.count})
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Snapshot Akun */}
+                  <div className="pt-4 border-t border-slate-100">
+                    <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider block mb-2">Status Akun Saat Dibuat</span>
+                    {viewingHistory.isPremiumSnapshot ? (
+                      <div className="inline-flex items-center bg-gradient-to-r from-amber-400 to-orange-500 text-white text-xs font-bold px-3 py-1.5 rounded-lg shadow-sm">
+                        <Zap className="w-4 h-4 mr-1.5 fill-current"/> Premium (Pro)
+                      </div>
+                    ) : (
+                      <div className="inline-flex items-center bg-slate-100 border border-slate-200 text-slate-600 text-xs font-bold px-3 py-1.5 rounded-lg">
+                        <ShieldAlert className="w-4 h-4 mr-1.5"/> Free / Trial
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+            </div>
+            {/* --- AKHIR PANEL DETAIL KONTEKS --- */}
+
+            <div className="bg-white rounded-2xl shadow-sm border p-8 sm:p-12 mt-6">
               <div id="printable-doc-area">
                 <div className="text-center mb-10 text-slate-800">
                   <h1 className="text-xl font-bold uppercase mb-1">SOAL {viewingHistory.examType} SD</h1>
@@ -210,7 +270,6 @@ export default function Dashboard() {
                 <h1 className="text-3xl font-extrabold text-slate-800 mb-2">Halo, {user.name}! 👋</h1>
                 <p className="text-slate-600 text-lg">Selamat datang di Dasbor EduQuest. Apa yang ingin Anda buat hari ini?</p>
               </div>
-              {/* TOMBOL MENGARAH KE HALAMAN GENERATE SOAL */}
               <Link href="/generate" className="w-full md:w-auto bg-blue-600 hover:bg-blue-700 text-white px-8 py-4 rounded-xl font-bold transition-all shadow-md hover:shadow-lg flex items-center justify-center shrink-0">
                 <Wand2 className="w-5 h-5 mr-2" /> Buat Soal Baru
               </Link>
@@ -260,7 +319,7 @@ export default function Dashboard() {
                                 onClick={() => setViewingHistory(item)}
                                 className="text-indigo-600 hover:text-indigo-800 font-bold text-xs bg-indigo-50 hover:bg-indigo-100 px-4 py-2 rounded-lg transition-colors inline-flex items-center"
                               >
-                                <Eye className="w-4 h-4 mr-2"/> Lihat Soal
+                                <Eye className="w-4 h-4 mr-2"/> Lihat Detail
                               </button>
                             </td>
                           </tr>
