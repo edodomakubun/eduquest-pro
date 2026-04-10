@@ -245,6 +245,12 @@ export default function Home() {
                 <span className="text-xs text-amber-600 hidden sm:inline-block">Koin</span>
                 <Link href="/payment" className="ml-3 text-xs flex items-center bg-amber-500 hover:bg-amber-600 text-white px-2 py-0.5 rounded transition-colors">+ Top Up</Link>
               </div>
+              
+              {/* --- TOMBOL PANDUAN --- */}
+              <Link href="/panduan" className="text-slate-500 hover:text-blue-600 flex items-center text-sm font-medium transition-colors">
+                <BookOpen className="w-4 h-4 sm:mr-1" /> <span className="hidden sm:inline-block">Panduan</span>
+              </Link>
+              
               <span className="text-sm font-medium text-slate-600 hidden md:inline-block">{user.name}</span>
               <button onClick={handleLogout} className="text-slate-500 hover:text-slate-800 flex items-center text-sm font-medium transition-colors">
                 <LogOut className="w-4 h-4 sm:mr-1" /> <span className="hidden sm:inline-block">Keluar</span>
