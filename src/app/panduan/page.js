@@ -154,7 +154,7 @@ export default function GuidePage() {
               <div className="flex flex-col sm:flex-row items-start gap-4">
                 <div className="w-8 h-8 rounded-full bg-slate-800 text-white flex items-center justify-center font-bold shrink-0">3</div>
                 <div>
-                  <h4 className="text-lg font-bold text-slate-800">Scan QRIS & Lakukan Pembayaran</h4>
+                  <h4 className="text-lg font-bold text-slate-800">Pembayaran bisa dilakukan dengan menggunakan scan QRIS dan transfer bank </h4>
                   <p className="text-slate-600 text-sm mt-1">Gunakan aplikasi perbankan (BCA, Mandiri, dll) atau e-Wallet (GoPay, OVO, Dana) untuk memindai <b>QR Code</b> yang tampil di layar. Lakukan transfer sesuai nominal harga paket.</p>
                 </div>
               </div>
