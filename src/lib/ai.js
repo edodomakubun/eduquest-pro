@@ -1,24 +1,8 @@
-import { db } from './firebase'; // Kita impor instance db untuk menarik Role AI
-import { doc, getDoc } from 'firebase/firestore';
-
+// Mengambil API Key dari brankas rahasia Vercel (Sangat Aman)
 const OPENROUTER_API_KEY = process.env.NEXT_PUBLIC_OPENROUTER_API_KEY;
-const AI_MODEL = "google/gemini-3.1-flash-lite-preview"; 
-const appId = 'eduquest-pro';
 
-// --- FUNGSI MENGAMBIL INSTRUKSI AI DARI DATABASE ---
-const fetchAiRoleFromDB = async () => {
-  try {
-    const aiRef = doc(db, 'artifacts', appId, 'public', 'data', 'settings', 'ai_role');
-    const snap = await getDoc(aiRef);
-    if (snap.exists() && snap.data().instruction) {
-      return snap.data().instruction;
-    }
-  } catch (error) {
-    console.error("Gagal menarik Role AI:", error);
-  }
-  // Default fallback jika belum di-set admin
-  return "Anda adalah asisten pembuat soal ujian Guru SD di Indonesia.";
-};
+// Menggunakan Model Gemini 3.1 Flash Lite Preview
+const AI_MODEL = "google/gemini-3.1-flash-lite-preview"; 
 
 export const analyzeBloomWithAI = async (levels, data, isPremium = false, retries = 3) => {
   if (!isPremium) return "Fitur Analisis AI Taksonomi Bloom khusus untuk pengguna Premium.";
@@ -35,7 +19,7 @@ export const analyzeBloomWithAI = async (levels, data, isPremium = false, retrie
         headers: { 
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${OPENROUTER_API_KEY}`,
-          'HTTP-Referer': 'https://eduquest-pro.vercel.app', 
+          'HTTP-Referer': 'https://eduquest-pro-ka55.vercel.app', 
           'X-Title': 'EduQuest Pro'
         },
         body: JSON.stringify({ 
@@ -58,6 +42,7 @@ export const analyzeBloomWithAI = async (levels, data, isPremium = false, retrie
 };
 
 export const callGeminiTextAPI = async (formData, isPremium = false, retries = 5) => {
+  // --- VALIDASI BACKEND: Keamanan User Free ---
   if (!isPremium) {
     const hasNonPG = formData.questionTypes.some(t => t.id !== 'pg' && t.checked);
     if (hasNonPG) throw new Error("Akses Ditolak: Versi Free hanya dapat membuat soal Pilihan Ganda.");
@@ -66,23 +51,13 @@ export const callGeminiTextAPI = async (formData, isPremium = false, retries = 5
   const activeTypes = formData.questionTypes.filter(t => t.checked && t.count > 0);
   const typesInstruction = activeTypes.map(t => `- ${t.label}: ${t.count} soal`).join('\n');
   const totalSoal = activeTypes.reduce((sum, t) => sum + t.count, 0);
+  
   const activeBlooms = isPremium ? formData.bloomLevels.filter(b => b.checked).map(b => b.label).join(', ') : 'Tidak ada batasan Bloom';
+  const bloomInstruction = isPremium ? `Fokus HANYA pada Taksonomi Bloom: ${activeBlooms}.` : 'Buat soal dasar (umum) tanpa spesifikasi Taksonomi Bloom yang rumit.';
   
-  // MENGAMBIL SYSTEM INSTRUCTION / ROLE AI DARI DB
-  const systemRole = await fetchAiRoleFromDB();
+  const imageInstruction = isPremium ? `"imagePrompt": "Deskripsi gambar gaya KARTUN ANAK-ANAK. WAJIB BAHASA INDONESIA jika ada teks. Tulis 'none' jika tak butuh."` : `"imagePrompt": "none"`;
 
-  // Menggabungkan instruksi dinamis Admin + Parameter User
-  const prompt = `${systemRole}
-  
-  TUGAS SAAT INI:
-  Buat total ${totalSoal} soal ujian untuk kelas ${formData.grade} SD, mapel ${formData.subject}. Ujian: ${formData.examType}. 
-  Fokus HANYA pada Taksonomi Bloom: ${activeBlooms}. 
-  Komposisi SOAL WAJIB: \n${typesInstruction}
-  
-  Materi Sumber: """${formData.rppText.substring(0, 3000)}"""
-  
-  Respons WAJIB format JSON murni tanpa awalan/akhiran markdown:
-  { "questions": [ { "id": "q1", "type": "Pilihan Ganda", "text": "Teks soal...", "options": ["A. Opsi 1"], "answer": "Jawaban", "bloomLevel": "Pilih satu Bloom", "imagePrompt": "Deskripsi gambar kartun. Tulis 'none' jika tak butuh." } ] }`;
+  const prompt = `Anda asisten pembuat soal ujian Guru SD di Indonesia. Buat total ${totalSoal} soal ujian untuk kelas ${formData.grade} SD, mapel ${formData.subject}. Ujian: ${formData.examType}. ${bloomInstruction} Komposisi: \n${typesInstruction}\nMateri: """${formData.rppText.substring(0, 3000)}"""\nRespons HANYA format JSON murni tanpa awalan/akhiran markdown:\n{ "questions": [ { "id": "q1", "type": "Pilihan Ganda", "text": "Teks soal...", "options": ["A. Opsi 1"], "answer": "Jawaban", "bloomLevel": "Pilih satu Bloom", ${imageInstruction} } ] }`;
 
   const url = `https://openrouter.ai/api/v1/chat/completions`;
   
@@ -93,12 +68,11 @@ export const callGeminiTextAPI = async (formData, isPremium = false, retries = 5
         headers: { 
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${OPENROUTER_API_KEY}`,
-          'HTTP-Referer': 'https://eduquest-pro.vercel.app',
+          'HTTP-Referer': 'https://eduquest-pro-ka55.vercel.app',
           'X-Title': 'EduQuest Pro'
         },
         body: JSON.stringify({ 
           model: AI_MODEL,
-          // API OpenRouter mensupport role "system" untuk instruksi dasar, tapi kita satukan ke "user" agar reasoningnya optimal di Gemini 3.1 Flash
           messages: [{ role: "user", content: prompt }],
           reasoning: { enabled: true },
           max_tokens: 4000 
@@ -122,18 +96,27 @@ export const callGeminiTextAPI = async (formData, isPremium = false, retries = 5
   }
 };
 
+// Mengubah parameter callImagenAPI dengan auto-retry 4 kali
 export const callImagenAPI = async (promptText, retries = 4) => {
   const finalPrompt = `cute, colorful cartoon style illustration for elementary school educational material. Highly relevant to the subject context. IF there are any written words or texts in the image, THEY MUST BE WRITTEN IN INDONESIAN. Child safe. Concept: ${promptText}`;
   
   for (let i = 0; i < retries; i++) {
     try {
+      // 1. Tambahkan "seed" (angka acak) agar request dianggap baru dan tidak kena blokir cache CDN
       const randomSeed = Math.floor(Math.random() * 1000000);
       const imageUrl = `https://image.pollinations.ai/prompt/${encodeURIComponent(finalPrompt)}?width=400&height=400&nologo=true&seed=${randomSeed}`;
       
-      if (i > 0) { await new Promise(r => setTimeout(r, 2000 * i)); }
+      // 2. Anti-Spam: Beri jeda/delay yang semakin lama setiap kali melakukan pengulangan
+      if (i > 0) {
+        console.warn(`Mengulang pemuatan gambar... Percobaan ke-${i+1}`);
+        await new Promise(r => setTimeout(r, 2000 * i)); 
+      }
+
+      // 3. Matikan policy referrer agar tidak ditolak oleh jaringan
       const response = await fetch(imageUrl, { referrerPolicy: "no-referrer" });
       
       if (!response.ok) throw new Error(`HTTP Error ${response.status}`);
+      
       const blob = await response.blob();
       
       return await new Promise((resolve, reject) => {
@@ -144,7 +127,11 @@ export const callImagenAPI = async (promptText, retries = 4) => {
       });
       
     } catch (error) {
-      if (i === retries - 1) return null; 
+      // 4. Tangkap error (seperti ERR_CONNECTION_RESET), lalu ulang loop
+      if (i === retries - 1) {
+        console.error("Gagal total mengonversi gambar setelah beberapa percobaan:", error);
+        return null; // Tetap kembalikan null agar tidak merusak aplikasi (gambar akan dilewati)
+      }
     }
   }
 };
