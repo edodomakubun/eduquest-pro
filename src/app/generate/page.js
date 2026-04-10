@@ -24,17 +24,14 @@ export default function GeneratePage() {
   const [coins, setCoins] = useState(0);
   const [isPremium, setIsPremium] = useState(false); 
   const [errorMsg, setErrorMsg] = useState('');
+
+  // --- STATE UNTUK DATA MASTER (DINAMIS DARI DB) ---
+  const [masterSubjects, setMasterSubjects] = useState(['Matematika']); 
+  const [isLoadingMaster, setIsLoadingMaster] = useState(true);
   
   const [formData, setFormData] = useState({
     subject: 'Matematika', grade: '1', examType: 'Asesmen Formatif',
-    bloomLevels: [
-      { id: 'c1', label: 'C1 (Mengingat)', checked: true },
-      { id: 'c2', label: 'C2 (Memahami)', checked: true },
-      { id: 'c3', label: 'C3 (Penerapan)', checked: false },
-      { id: 'c4', label: 'C4 (Analisis)', checked: false },
-      { id: 'c5', label: 'C5 (Evaluasi)', checked: false },
-      { id: 'c6', label: 'C6 (Mencipta)', checked: false },
-    ],
+    bloomLevels: [], 
     questionTypes: [
       { id: 'pg', label: 'Pilihan Ganda', checked: true, count: 5 },
       { id: 'isian', label: 'Isian Singkat', checked: false, count: 5 },
@@ -52,6 +49,7 @@ export default function GeneratePage() {
   const [isAnalyzingBloom, setIsAnalyzingBloom] = useState(false);
   const [isExtracting, setIsExtracting] = useState(false); 
 
+  // --- CEK AKSES DOMAIN ---
   const checkAccess = async (userEmail) => {
     if (userEmail === 'operator.sdinpresleling2023@gmail.com') return 'admin';
     try {
@@ -63,6 +61,29 @@ export default function GeneratePage() {
       return isAllowed ? 'user' : 'denied';
     } catch (error) { return 'denied'; }
   };
+
+  // --- FETCH MASTER DATA ---
+  useEffect(() => {
+    const masterRef = doc(db, 'artifacts', appId, 'public', 'data', 'settings', 'master_data');
+    const unsubMaster = onSnapshot(masterRef, (docSnap) => {
+      if (docSnap.exists()) {
+        const data = docSnap.data();
+        setMasterSubjects(data.subjects || ['Matematika']);
+        
+        const dynamicBlooms = (data.bloomLevels || []).map((b, i) => ({
+          id: b.id, label: b.label, checked: i < 2 // Default centang 2 opsi pertama
+        }));
+        
+        setFormData(prev => ({ 
+          ...prev, 
+          subject: data.subjects && data.subjects.length > 0 ? data.subjects[0] : 'Matematika',
+          bloomLevels: dynamicBlooms 
+        }));
+      }
+      setIsLoadingMaster(false);
+    });
+    return () => unsubMaster();
+  }, []);
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
@@ -91,22 +112,22 @@ export default function GeneratePage() {
     const unsubUser = onSnapshot(userDocRef, (docSnap) => {
       if (docSnap.exists()) {
         const data = docSnap.data();
-        setCoins(data.coins);
+        setCoins(data.coins || 0);
         setIsPremium(data.isPremium || false); 
       }
-    }, (error) => console.error(error));
+    });
     return () => unsubUser();
   }, [user]);
 
   useEffect(() => {
-    if (!isPremium) {
+    if (!isPremium && !isLoadingMaster && formData.bloomLevels.length > 0) {
       setFormData(prev => ({
         ...prev,
         questionTypes: prev.questionTypes.map(t => t.id === 'pg' ? { ...t, checked: true } : { ...t, checked: false }),
         bloomLevels: prev.bloomLevels.map(b => ({ ...b, checked: false }))
       }));
     }
-  }, [isPremium]);
+  }, [isPremium, isLoadingMaster]);
 
   const handleLogout = async () => {
     await signOut(auth);
@@ -181,7 +202,9 @@ export default function GeneratePage() {
       script.id = 'pdfjs-script';
       script.src = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.min.js';
       document.head.appendChild(script);
-      script.onload = () => window.pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.worker.min.js';
+      script.onload = () => {
+         if(window.pdfjsLib) window.pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.worker.min.js';
+      }
     }
   }, []);
 
@@ -230,7 +253,7 @@ export default function GeneratePage() {
     return () => clearTimeout(timeoutId);
   }, [JSON.stringify(formData.bloomLevels), formData.grade, formData.subject, formData.examType, formData.rppText, appState, isPremium]);
 
-  if (!user) return <div className="min-h-screen flex items-center justify-center bg-slate-50"><Loader2 className="w-8 h-8 animate-spin text-blue-600"/></div>;
+  if (!user || isLoadingMaster) return <div className="min-h-screen flex items-center justify-center bg-slate-50"><Loader2 className="w-8 h-8 animate-spin text-blue-600"/></div>;
 
   return (
     <div className="min-h-screen bg-slate-50 text-slate-900 font-sans pb-20">
@@ -269,7 +292,7 @@ export default function GeneratePage() {
                   <div>
                     <label className="block text-sm font-medium text-slate-700 mb-1">Mata Pelajaran</label>
                     <select value={formData.subject} onChange={(e) => setFormData({...formData, subject: e.target.value})} className="w-full border rounded-lg px-3 py-2 outline-none focus:ring-2 focus:ring-blue-500 bg-white">
-                      <option>Matematika</option><option>Ilmu Pengetahuan Alam (IPA)</option><option>Ilmu Pengetahuan Sosial (IPS)</option><option>Bahasa Indonesia</option><option>Pendidikan Agama Kristen</option><option>Pendidikan Agama Islam</option>
+                      {masterSubjects.map((sub, idx) => <option key={idx} value={sub}>{sub}</option>)}
                     </select>
                   </div>
                   <div className="grid grid-cols-2 gap-4">
@@ -310,7 +333,10 @@ export default function GeneratePage() {
                     <label className="flex items-center justify-between text-sm font-medium text-slate-700 mb-2"><span>Target Taksonomi Bloom</span>{!isPremium && <Lock className="w-3 h-3 text-slate-400" />}</label>
                     <div className={`grid grid-cols-2 gap-2 border rounded-xl p-3 ${!isPremium ? 'bg-slate-100/50 opacity-60 pointer-events-none' : 'bg-slate-50'}`}>
                       {formData.bloomLevels.map((level, index) => (
-                        <label key={level.id} className="flex items-center space-x-2 cursor-pointer bg-white p-2 rounded-lg border shadow-sm"><input type="checkbox" checked={level.checked} onChange={(e) => { const newLevels = [...formData.bloomLevels]; newLevels[index].checked = e.target.checked; setFormData({...formData, bloomLevels: newLevels}); }} className="w-4 h-4 text-blue-600" /><span className="text-xs font-medium text-slate-700 truncate">{level.label}</span></label>
+                        <label key={level.id} className="flex items-center space-x-2 cursor-pointer bg-white p-2 rounded-lg border shadow-sm">
+                          <input type="checkbox" checked={level.checked} onChange={(e) => { const newLevels = [...formData.bloomLevels]; newLevels[index].checked = e.target.checked; setFormData({...formData, bloomLevels: newLevels}); }} className="w-4 h-4 text-blue-600" />
+                          <span className="text-xs font-medium text-slate-700 truncate" title={level.label}>{level.label}</span>
+                        </label>
                       ))}
                     </div>
                     {isPremium ? (
