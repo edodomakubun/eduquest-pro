@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation';
 import { 
   ShieldCheck, Users, Settings, Image as ImageIcon, Upload, LogOut, 
   CheckCircle2, AlertCircle, Loader2, Plus, Save, Eye, EyeOff, Trash2, X,
-  Clock, ChevronLeft, FileText, Zap, ShieldAlert, CreditCard
+  Clock, ChevronLeft, FileText, Zap, ShieldAlert, CreditCard, Globe
 } from 'lucide-react';
 import { auth, db } from '../../lib/firebase';
 import { onAuthStateChanged, signOut } from 'firebase/auth';
@@ -21,10 +21,12 @@ export default function AdminPage() {
   const [allUsers, setAllUsers] = useState([]);
   const [allTransactions, setAllTransactions] = useState([]);
   const [packages, setPackages] = useState([]);
-  
-  // State untuk Rekening Bank (Fitur Baru)
   const [bankDetails, setBankDetails] = useState({ bankName: '', accountName: '', accountNumber: '' });
   
+  // State untuk Whitelist Domain (Fitur Baru)
+  const [allowedDomains, setAllowedDomains] = useState([]);
+  const [newDomain, setNewDomain] = useState('');
+
   const [selectedUserHistory, setSelectedUserHistory] = useState(null); 
   const [userHistories, setUserHistories] = useState([]);
   const [viewingDetail, setViewingDetail] = useState(null);
@@ -48,19 +50,16 @@ export default function AdminPage() {
   useEffect(() => {
     if (!isAdmin) return;
     
-    // 1. Ambil Data User
     const usersColRef = collection(db, 'artifacts', appId, 'public', 'data', 'profiles');
     const unsubUsers = onSnapshot(usersColRef, (snapshot) => {
       setAllUsers(snapshot.docs.map(d => ({ id: d.id, ...d.data() })));
     });
 
-    // 2. Ambil Data Transaksi
     const txColRef = collection(db, 'artifacts', appId, 'public', 'data', 'transactions');
     const unsubAllTx = onSnapshot(txColRef, (snapshot) => {
       setAllTransactions(snapshot.docs.map(d => ({ id: d.id, ...d.data() })).sort((a,b) => new Date(b.createdAt) - new Date(a.createdAt)));
     });
 
-    // 3. Ambil Data Paket & Info Bank
     const pkgsRef = doc(db, 'artifacts', appId, 'public', 'data', 'settings', 'packages');
     const unsubPkgs = onSnapshot(pkgsRef, (docSnap) => {
       if (docSnap.exists()) {
@@ -78,7 +77,18 @@ export default function AdminPage() {
       }
     });
 
-    return () => { unsubUsers(); unsubAllTx(); unsubPkgs(); };
+    // 4. Ambil Data Whitelist Domain
+    const domainsRef = doc(db, 'artifacts', appId, 'public', 'data', 'settings', 'allowed_domains');
+    const unsubDomains = onSnapshot(domainsRef, (docSnap) => {
+      if (docSnap.exists()) {
+        setAllowedDomains(docSnap.data().list || []);
+      } else {
+        setDoc(domainsRef, { list: ['@guru.sd.belajar.id'] });
+        setAllowedDomains(['@guru.sd.belajar.id']);
+      }
+    });
+
+    return () => { unsubUsers(); unsubAllTx(); unsubPkgs(); unsubDomains(); };
   }, [isAdmin]);
 
   // --- LOGIKA MENGAMBIL RIWAYAT SATU USER ---
@@ -127,6 +137,32 @@ export default function AdminPage() {
     } catch (error) { showError('Gagal menyetujui: ' + error.message); }
   };
 
+  // --- LOGIKA MANAJEMEN WHITELIST DOMAIN ---
+  const handleAddDomain = async () => {
+    const domain = newDomain.trim().toLowerCase();
+    if (!domain) return;
+    if (!domain.startsWith('@')) return showError('Domain harus diawali dengan simbol @ (contoh: @sekolah.sch.id)');
+    if (allowedDomains.includes(domain)) return showError('Domain tersebut sudah terdaftar.');
+    
+    try {
+      const domainsRef = doc(db, 'artifacts', appId, 'public', 'data', 'settings', 'allowed_domains');
+      await updateDoc(domainsRef, { list: [...allowedDomains, domain] });
+      setNewDomain('');
+      showSuccess('Domain berhasil ditambahkan!');
+    } catch (e) { showError('Gagal menambah domain: ' + e.message); }
+  };
+
+  const handleRemoveDomain = async (domainToRemove) => {
+    if (allowedDomains.length <= 1) return showError('Harus ada minimal 1 domain yang tersisa.');
+    if (confirm(`Yakin ingin menghapus akses untuk domain ${domainToRemove}?`)) {
+      try {
+        const domainsRef = doc(db, 'artifacts', appId, 'public', 'data', 'settings', 'allowed_domains');
+        await updateDoc(domainsRef, { list: allowedDomains.filter(d => d !== domainToRemove) });
+        showSuccess('Domain berhasil dihapus!');
+      } catch (e) { showError('Gagal menghapus domain: ' + e.message); }
+    }
+  };
+
   const handleLogout = async () => {
     await signOut(auth);
     router.push('/login');
@@ -163,7 +199,6 @@ export default function AdminPage() {
     setIsSavingPackages(true);
     try {
       const pkgsRef = doc(db, 'artifacts', appId, 'public', 'data', 'settings', 'packages');
-      // Menyimpan detail paket DAN detail bank secara bersamaan
       await setDoc(pkgsRef, { items: packages, bankDetails: bankDetails });
       showSuccess('Semua pengaturan paket & Rekening Bank berhasil disimpan!');
     } catch (e) {
@@ -195,7 +230,12 @@ export default function AdminPage() {
 
       <main className="max-w-7xl mx-auto px-4 py-8">
         <div className="flex space-x-2 border-b border-slate-300 mb-6 overflow-x-auto hide-scrollbar">
-          {[{ id: 'transactions', label: 'Verifikasi Pembayaran', icon: ShieldCheck }, { id: 'users', label: 'Data User & Pemantauan', icon: Users }, { id: 'settings', label: 'Pengaturan Paket', icon: Settings }].map(tab => (
+          {[
+            { id: 'transactions', label: 'Verifikasi Pembayaran', icon: ShieldCheck }, 
+            { id: 'users', label: 'Data User & Pemantauan', icon: Users }, 
+            { id: 'domains', label: 'Whitelist Domain', icon: Globe },
+            { id: 'settings', label: 'Pengaturan Paket', icon: Settings }
+          ].map(tab => (
             <button key={tab.id} onClick={() => setAdminTab(tab.id)} className={`whitespace-nowrap px-4 py-3 text-sm font-bold border-b-2 transition-colors flex items-center ${adminTab === tab.id ? 'border-indigo-600 text-indigo-700 bg-white rounded-t-lg' : 'border-transparent text-slate-500 hover:text-slate-800'}`}>
               <tab.icon className="w-4 h-4 mr-2" /> {tab.label}
               {tab.id === 'transactions' && allTransactions.filter(t => t.status === 'pending').length > 0 && (
@@ -308,7 +348,6 @@ export default function AdminPage() {
                     </div>
                   </div>
 
-                  {/* HASIL SOAL YANG DI-GENERATE */}
                   <div className="bg-white rounded-2xl shadow-sm border p-8">
                     <h3 className="font-bold text-slate-800 text-lg mb-6 border-b pb-3">Hasil Soal yang Dibuat</h3>
                     <div className="space-y-10">
@@ -417,7 +456,51 @@ export default function AdminPage() {
           </div>
         )}
 
-        {/* TAB: PENGATURAN PAKET, BANK & QR CODE */}
+        {/* TAB: WHITELIST DOMAIN (FITUR BARU) */}
+        {adminTab === 'domains' && (
+          <div className="bg-white border rounded-xl shadow-sm overflow-hidden animate-in fade-in max-w-4xl">
+            <div className="p-4 bg-slate-50 border-b font-bold text-slate-700 flex items-center">
+              <Globe className="w-5 h-5 mr-2 text-blue-600" />
+              Pengaturan Akses Login (Whitelist Domain)
+            </div>
+            <div className="p-6">
+              <p className="text-sm text-slate-500 mb-6">Tambahkan domain email institusi yang diizinkan untuk masuk ke dalam aplikasi (misal: <b className="text-slate-700">@guru.smp.belajar.id</b>). Email Admin akan selalu dapat mengakses sistem tanpa perlu ditambahkan ke sini.</p>
+              
+              <div className="mb-8 flex flex-col sm:flex-row gap-4 items-end bg-slate-50 p-4 rounded-xl border border-slate-200">
+                <div className="flex-1 w-full">
+                  <label className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-1.5 block">Tambah Domain Baru</label>
+                  <input type="text" value={newDomain} onChange={e => setNewDomain(e.target.value)} placeholder="Cth: @sekolah.sch.id" className="w-full border border-slate-300 focus:border-blue-500 rounded-lg px-4 py-2.5 outline-none text-sm font-medium" />
+                </div>
+                <button onClick={handleAddDomain} className="w-full sm:w-auto bg-blue-600 hover:bg-blue-700 text-white px-6 py-2.5 rounded-lg text-sm font-bold transition-colors flex items-center justify-center shadow-sm">
+                  <Plus className="w-4 h-4 mr-2"/> Tambah Domain
+                </button>
+              </div>
+
+              <div className="overflow-hidden border border-slate-200 rounded-xl">
+                <table className="w-full text-left text-sm">
+                  <thead className="bg-slate-100 text-slate-600 border-b border-slate-200">
+                    <tr><th className="p-4 font-bold">Daftar Domain yang Diizinkan</th><th className="p-4 text-right font-bold w-32">Aksi</th></tr>
+                  </thead>
+                  <tbody>
+                    {allowedDomains.length === 0 && <tr><td colSpan="2" className="p-8 text-center text-slate-500">Belum ada domain yang diizinkan.</td></tr>}
+                    {allowedDomains.map((domain, i) => (
+                      <tr key={i} className="border-b border-slate-100 hover:bg-slate-50 transition-colors">
+                        <td className="p-4 font-bold text-slate-800 text-base">{domain}</td>
+                        <td className="p-4 text-right">
+                          <button onClick={() => handleRemoveDomain(domain)} className="text-red-500 hover:text-white hover:bg-red-500 bg-red-50 p-2.5 rounded-lg transition-colors flex items-center justify-center ml-auto" title="Cabut Akses">
+                            <Trash2 className="w-4 h-4"/>
+                          </button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* TAB: PENGATURAN PAKET & BANK */}
         {adminTab === 'settings' && (
           <div className="space-y-6 animate-in fade-in">
             <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center bg-white p-5 rounded-xl border shadow-sm gap-4">
@@ -436,7 +519,6 @@ export default function AdminPage() {
               </div>
             </div>
 
-            {/* --- PANEL PENGATURAN REKENING BANK --- */}
             <div className="bg-white p-6 rounded-2xl border shadow-sm mb-8">
               <h3 className="font-bold text-lg text-slate-800 mb-4 flex items-center"><CreditCard className="w-5 h-5 mr-2 text-indigo-600" /> Pengaturan Rekening Bank (Transfer Manual)</h3>
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">

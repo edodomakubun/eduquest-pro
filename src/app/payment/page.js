@@ -5,8 +5,8 @@ import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { CreditCard, Coins, Check, Download, Image as ImageIcon, Loader2, AlertCircle, CheckCircle2, ChevronLeft, Building, Copy, Zap } from 'lucide-react';
 import { auth, db } from '../../lib/firebase';
-import { onAuthStateChanged } from 'firebase/auth';
-import { doc, onSnapshot, collection, addDoc } from 'firebase/firestore';
+import { onAuthStateChanged, signOut } from 'firebase/auth';
+import { doc, getDoc, onSnapshot, collection, addDoc } from 'firebase/firestore';
 
 const appId = 'eduquest-pro';
 
@@ -17,28 +17,48 @@ export default function PaymentPage() {
   const [successMsg, setSuccessMsg] = useState('');
   
   const [packages, setPackages] = useState([]); 
-  const [bankDetails, setBankDetails] = useState(null); // Menyimpan info bank dari Admin
+  const [bankDetails, setBankDetails] = useState(null);
 
   const [selectedPackage, setSelectedPackage] = useState(null);
-  const [paymentMethod, setPaymentMethod] = useState('QR_Code'); // Tab: 'QR_Code' atau 'Transfer_Bank'
+  const [paymentMethod, setPaymentMethod] = useState('QR_Code'); 
   
   const [paymentProofBase64, setPaymentProofBase64] = useState('');
   const [isSubmittingPayment, setIsSubmittingPayment] = useState(false);
   const [userPendingTx, setUserPendingTx] = useState(null);
 
-  // Pastikan user login
+  const checkAccess = async (userEmail) => {
+    if (userEmail === 'operator.sdinpresleling2023@gmail.com') return 'admin';
+    try {
+      const domainsRef = doc(db, 'artifacts', appId, 'public', 'data', 'settings', 'allowed_domains');
+      const docSnap = await getDoc(domainsRef);
+      const domains = docSnap.exists() ? docSnap.data().list || [] : ['@guru.sd.belajar.id'];
+      
+      const isAllowed = domains.some(domain => userEmail.toLowerCase().endsWith(domain.toLowerCase()));
+      return isAllowed ? 'user' : 'denied';
+    } catch (error) { return 'denied'; }
+  };
+
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
-      if (currentUser && currentUser.email.endsWith('@guru.sd.belajar.id')) {
-        setUser({ uid: currentUser.uid, name: currentUser.displayName, email: currentUser.email });
+    const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
+      if (currentUser) {
+        const email = currentUser.email || '';
+        const access = await checkAccess(email);
+        
+        if (access === 'admin') {
+          router.push('/admin');
+        } else if (access === 'user') {
+          setUser({ uid: currentUser.uid, name: currentUser.displayName || 'Guru', email: email });
+        } else {
+          await signOut(auth);
+          router.push('/login');
+        }
       } else {
-        router.push('/'); 
+        router.push('/login');
       }
     });
     return () => unsubscribe();
   }, [router]);
 
-  // Ambil Data Transaksi Tertunda & Data Paket + Bank Dinamis dari Admin
   useEffect(() => {
     if (!user) return;
     
@@ -91,7 +111,7 @@ export default function PaymentPage() {
         packageName: selectedPackage.name,
         coinsToAdd: selectedPackage.coins,
         price: selectedPackage.price,
-        paymentMethod: paymentMethod, // Field tambahan untuk mencatat metode yang dipilih
+        paymentMethod: paymentMethod, 
         proofImage: paymentProofBase64,
         status: 'pending',
         createdAt: new Date().toISOString()
@@ -190,10 +210,7 @@ export default function PaymentPage() {
             </div>
 
             <div className="flex flex-col md:flex-row gap-8">
-              {/* KOLOM KIRI: METODE PEMBAYARAN */}
               <div className="flex-1 border border-slate-200 rounded-xl overflow-hidden shadow-sm">
-                
-                {/* Toggles (Tabs) */}
                 <div className="flex w-full bg-slate-50 border-b border-slate-200">
                   <button 
                     onClick={() => setPaymentMethod('QR_Code')} 
@@ -210,8 +227,6 @@ export default function PaymentPage() {
                 </div>
 
                 <div className="p-6 text-center flex flex-col items-center justify-center min-h-[250px] bg-white">
-                  
-                  {/* TAMPILAN JIKA PILIH QR CODE */}
                   {paymentMethod === 'QR_Code' && (
                     <div className="animate-in fade-in">
                       <div className="bg-slate-50 p-4 rounded-xl border border-slate-200 inline-block mb-4">
@@ -232,7 +247,6 @@ export default function PaymentPage() {
                     </div>
                   )}
 
-                  {/* TAMPILAN JIKA PILIH TRANSFER BANK */}
                   {paymentMethod === 'Transfer_Bank' && (
                     <div className="animate-in fade-in w-full text-left">
                       {!bankDetails || !bankDetails.accountNumber ? (
@@ -269,7 +283,6 @@ export default function PaymentPage() {
                 </div>
               </div>
               
-              {/* KOLOM KANAN: UNGGAH BUKTI TRANSFER */}
               <div className="flex-1 flex flex-col justify-center bg-slate-50 p-6 rounded-xl border border-slate-200 shadow-inner">
                 <h3 className="text-lg font-bold text-slate-800 mb-4 text-center">Konfirmasi Pembayaran</h3>
                 <label className="border-2 border-dashed border-slate-300 bg-white rounded-xl p-6 flex flex-col items-center justify-center text-slate-500 cursor-pointer hover:bg-slate-50 hover:border-blue-300 transition-colors mb-4 min-h-[160px]">
