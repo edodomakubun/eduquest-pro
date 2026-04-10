@@ -64,10 +64,13 @@ export default function Dashboard() {
     return () => unsubUser();
   }, [user]);
 
-  // --- LOGIKA MENGAMBIL RIWAYAT GENERATE SOAL (HISTORY) ---
+// --- LOGIKA MENGAMBIL RIWAYAT GENERATE SOAL (HISTORY) ---
   useEffect(() => {
     if (!user) return;
-    const historyColRef = collection(db, 'artifacts', appId, 'users', user.uid, 'history');
+    
+    // PERBAIKAN: Jalur database diubah agar sesuai dengan Rules Firebase
+    const historyColRef = collection(db, 'artifacts', appId, 'public', 'data', 'history', user.uid, 'saved_exams');
+    
     const unsubHistory = onSnapshot(historyColRef, (snapshot) => {
       const docs = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
       docs.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));

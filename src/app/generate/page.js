@@ -145,9 +145,11 @@ export default function GeneratePage() {
         generatedQuestions.forEach(q => questionsWithImages.push(q));
       }
 
-      // SIMPAN HASIL KE RIWAYAT (HISTORY)
+// SIMPAN HASIL KE RIWAYAT (HISTORY)
       try {
-        const historyColRef = collection(db, 'artifacts', appId, 'users', user.uid, 'history');
+        // PERBAIKAN: Jalur database diubah agar sesuai dengan Rules Firebase
+        const historyColRef = collection(db, 'artifacts', appId, 'public', 'data', 'history', user.uid, 'saved_exams');
+        
         await addDoc(historyColRef, {
           subject: formData.subject,
           grade: formData.grade,
