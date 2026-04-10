@@ -2,7 +2,11 @@
 
 import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { ShieldCheck, Users, Settings, Image as ImageIcon, Upload, LogOut, CheckCircle2, AlertCircle, Loader2, Plus, Save, Eye, EyeOff, Trash2, X } from 'lucide-react';
+import { 
+  ShieldCheck, Users, Settings, Image as ImageIcon, Upload, LogOut, 
+  CheckCircle2, AlertCircle, Loader2, Plus, Save, Eye, EyeOff, Trash2, X,
+  Clock, ChevronLeft, FileText, Zap, ShieldAlert
+} from 'lucide-react';
 import { auth, db } from '../../lib/firebase';
 import { onAuthStateChanged, signOut } from 'firebase/auth';
 import { doc, setDoc, onSnapshot, updateDoc, increment, collection } from 'firebase/firestore';
@@ -16,7 +20,12 @@ export default function AdminPage() {
   const [adminTab, setAdminTab] = useState('transactions'); 
   const [allUsers, setAllUsers] = useState([]);
   const [allTransactions, setAllTransactions] = useState([]);
-  const [packages, setPackages] = useState([]); // State untuk manajemen paket
+  const [packages, setPackages] = useState([]);
+  
+  // State untuk Pemantauan Riwayat (Fitur Baru)
+  const [selectedUserHistory, setSelectedUserHistory] = useState(null); 
+  const [userHistories, setUserHistories] = useState([]);
+  const [viewingDetail, setViewingDetail] = useState(null);
   
   const [previewImage, setPreviewImage] = useState(null); 
   const [errorMsg, setErrorMsg] = useState('');
@@ -55,7 +64,6 @@ export default function AdminPage() {
       if (docSnap.exists()) {
         setPackages(docSnap.data().items || []);
       } else {
-        // Jika belum ada, buat paket default
         const defaultPkgs = [
           { id: 'pkg_1', name: 'Paket Basic', coins: 100, generate: 10, price: 20000, color: 'blue', isActive: true, qrCode: '' },
           { id: 'pkg_2', name: 'Paket Basic+', coins: 150, generate: 15, price: 28000, color: 'indigo', isActive: true, qrCode: '' },
@@ -67,6 +75,24 @@ export default function AdminPage() {
 
     return () => { unsubUsers(); unsubAllTx(); unsubPkgs(); };
   }, [isAdmin]);
+
+  // --- LOGIKA MENGAMBIL RIWAYAT SATU USER ---
+  useEffect(() => {
+    if (!selectedUserHistory) return;
+    const histRef = collection(db, 'artifacts', appId, 'public', 'data', 'history', selectedUserHistory.id, 'saved_exams');
+    const unsub = onSnapshot(histRef, (snapshot) => {
+      const docs = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
+      docs.sort((a,b) => new Date(b.createdAt) - new Date(a.createdAt));
+      setUserHistories(docs);
+    }, (error) => console.error("Gagal menarik riwayat user:", error));
+    return () => unsub();
+  }, [selectedUserHistory]);
+
+  // Bersihkan state riwayat jika ganti tab
+  useEffect(() => {
+    setSelectedUserHistory(null);
+    setViewingDetail(null);
+  }, [adminTab]);
 
   const handleImageToAPI = (file, callback) => {
     const reader = new FileReader();
@@ -88,7 +114,6 @@ export default function AdminPage() {
 
   const approveTransaction = async (tx) => {
     try {
-      // SET isPremium: true KETIKA TRANSAKSI DISETUJUI
       const userRef = doc(db, 'artifacts', appId, 'public', 'data', 'profiles', tx.uid);
       await updateDoc(userRef, { coins: increment(tx.coinsToAdd), isPremium: true });
       
@@ -116,15 +141,11 @@ export default function AdminPage() {
   const handleUploadPackageQR = (index, e) => {
     const file = e.target.files[0];
     if (!file) return;
-    handleImageToAPI(file, (base64) => {
-      updatePackage(index, 'qrCode', base64);
-    });
+    handleImageToAPI(file, (base64) => { updatePackage(index, 'qrCode', base64); });
   };
 
   const addNewPackage = () => {
-    const newPkg = { 
-      id: 'pkg_' + Date.now(), name: 'Paket Baru', coins: 50, generate: 5, price: 10000, color: 'slate', isActive: false, qrCode: '' 
-    };
+    const newPkg = { id: 'pkg_' + Date.now(), name: 'Paket Baru', coins: 50, generate: 5, price: 10000, color: 'slate', isActive: false, qrCode: '' };
     setPackages([...packages, newPkg]);
   };
 
@@ -170,7 +191,7 @@ export default function AdminPage() {
 
       <main className="max-w-7xl mx-auto px-4 py-8">
         <div className="flex space-x-2 border-b border-slate-300 mb-6 overflow-x-auto hide-scrollbar">
-          {[{ id: 'transactions', label: 'Verifikasi Pembayaran', icon: ShieldCheck }, { id: 'users', label: 'Data User', icon: Users }, { id: 'settings', label: 'Pengaturan Paket & QR', icon: Settings }].map(tab => (
+          {[{ id: 'transactions', label: 'Verifikasi Pembayaran', icon: ShieldCheck }, { id: 'users', label: 'Data User & Pemantauan', icon: Users }, { id: 'settings', label: 'Pengaturan Paket', icon: Settings }].map(tab => (
             <button key={tab.id} onClick={() => setAdminTab(tab.id)} className={`whitespace-nowrap px-4 py-3 text-sm font-bold border-b-2 transition-colors flex items-center ${adminTab === tab.id ? 'border-indigo-600 text-indigo-700 bg-white rounded-t-lg' : 'border-transparent text-slate-500 hover:text-slate-800'}`}>
               <tab.icon className="w-4 h-4 mr-2" /> {tab.label}
               {tab.id === 'transactions' && allTransactions.filter(t => t.status === 'pending').length > 0 && (
@@ -182,7 +203,7 @@ export default function AdminPage() {
 
         {/* TAB: VERIFIKASI TRANSAKSI */}
         {adminTab === 'transactions' && (
-          <div className="bg-white border rounded-xl shadow-sm overflow-hidden">
+          <div className="bg-white border rounded-xl shadow-sm overflow-hidden animate-in fade-in">
             <div className="p-4 bg-slate-50 border-b font-bold text-slate-700">Riwayat & Permintaan Pembayaran</div>
             <div className="overflow-x-auto">
               <table className="w-full text-left text-sm">
@@ -208,30 +229,212 @@ export default function AdminPage() {
           </div>
         )}
 
-        {/* TAB: DATA USER */}
+        {/* TAB: DATA USER & PEMANTAUAN RIWAYAT */}
         {adminTab === 'users' && (
-          <div className="bg-white border rounded-xl shadow-sm overflow-hidden">
-            <div className="p-4 bg-slate-50 border-b font-bold text-slate-700 flex justify-between"><span>Daftar Guru / Pengguna</span> <span>Total: {allUsers.length}</span></div>
-            <div className="overflow-x-auto">
-              <table className="w-full text-left text-sm">
-                <thead className="bg-slate-100 text-slate-600"><tr><th className="p-4">Nama</th><th className="p-4">Email</th><th className="p-4 text-center">Sisa Koin</th><th className="p-4 text-right">Tgl Mendaftar</th></tr></thead>
-                <tbody>
-                  {allUsers.map((u, i) => (
-                    <tr key={i} className="border-b hover:bg-slate-50">
-                      <td className="p-4 font-medium">{u.name}</td><td className="p-4 text-slate-500">{u.email}</td>
-                      <td className="p-4 text-center font-bold text-amber-600 text-lg">{u.coins}</td>
-                      <td className="p-4 text-right text-slate-400 text-xs">{new Date(u.createdAt).toLocaleDateString('id-ID')}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+          <div className="space-y-6 animate-in fade-in">
+            {selectedUserHistory ? (
+              viewingDetail ? (
+                /* --- MODE ADMIN: MELIHAT DETAIL SOAL + KONTEKS --- */
+                <div className="space-y-6">
+                  <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between bg-white p-4 rounded-xl border shadow-sm gap-4">
+                    <div className="flex items-center space-x-3 text-slate-700">
+                      <div className="bg-indigo-100 p-2 rounded-lg"><FileText className="w-5 h-5 text-indigo-600" /></div>
+                      <div>
+                        <span className="font-bold block">Detail Log Aktivitas: {selectedUserHistory.name}</span>
+                        <span className="text-xs text-slate-500">Mata Pelajaran: {viewingDetail.subject} (Kelas {viewingDetail.grade})</span>
+                      </div>
+                    </div>
+                    <button onClick={() => setViewingDetail(null)} className="px-4 py-2 w-full sm:w-auto bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg text-sm font-bold flex items-center justify-center transition-colors">
+                      <ChevronLeft className="w-4 h-4 mr-1"/> Kembali ke Daftar Riwayat
+                    </button>
+                  </div>
+
+                  {/* PANEL AUDIT KONTEKS (MATERI, PARAMETER, SNAPSHOT STATUS) */}
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                    {/* Panel Kiri: Materi Sumber */}
+                    <div className="col-span-1 md:col-span-2 bg-white p-6 rounded-2xl border border-slate-200 shadow-sm flex flex-col">
+                      <h3 className="font-bold text-slate-800 flex items-center mb-3">
+                        <FileText className="w-5 h-5 mr-2 text-indigo-500"/> Materi Sumber (Input Pengguna)
+                      </h3>
+                      <div className="bg-slate-50 p-4 rounded-xl border border-slate-100 text-sm text-slate-600 flex-grow max-h-[250px] overflow-y-auto" style={{ whiteSpace: 'pre-wrap' }}>
+                        {viewingDetail.formData?.rppText ? viewingDetail.formData.rppText : <span className="italic text-slate-400">Tidak ada materi sumber yang dicatat.</span>}
+                      </div>
+                    </div>
+
+                    {/* Panel Kanan: Parameter Generate & Snapshot Akun */}
+                    <div className="col-span-1 bg-white p-6 rounded-2xl border border-slate-200 shadow-sm">
+                      <h3 className="font-bold text-slate-800 flex items-center mb-4">
+                        <Settings className="w-5 h-5 mr-2 text-slate-500"/> Parameter Generate
+                      </h3>
+                      
+                      <div className="space-y-4">
+                        <div>
+                          <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider block mb-1.5">Target Taksonomi Bloom</span>
+                          <div className="flex flex-wrap gap-1.5">
+                            {viewingDetail.formData?.bloomLevels?.filter(b => b.checked).length > 0 
+                              ? viewingDetail.formData.bloomLevels.filter(b => b.checked).map(b => (
+                                  <span key={b.id} className="bg-blue-50 border border-blue-100 text-blue-700 text-xs font-bold px-2 py-1 rounded-md">{b.id.toUpperCase()}</span>
+                                ))
+                              : <span className="text-xs text-slate-500 bg-slate-100 px-2 py-1 rounded-md border border-slate-200">Default AI</span>
+                            }
+                          </div>
+                        </div>
+
+                        <div>
+                          <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider block mb-1.5">Komposisi Jenis Soal</span>
+                          <div className="flex flex-wrap gap-1.5">
+                            {viewingDetail.formData?.questionTypes?.filter(t => t.checked && t.count > 0).map(t => (
+                              <span key={t.id} className="bg-green-50 border border-green-100 text-green-700 text-xs font-bold px-2 py-1 rounded-md">
+                                {t.label} ({t.count})
+                              </span>
+                            ))}
+                          </div>
+                        </div>
+
+                        <div className="pt-4 border-t border-slate-100">
+                          <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider block mb-2">Snapshot Status Akun</span>
+                          {viewingDetail.isPremiumSnapshot ? (
+                            <div className="inline-flex items-center bg-gradient-to-r from-amber-400 to-orange-500 text-white text-xs font-bold px-3 py-1.5 rounded-lg shadow-sm">
+                              <Zap className="w-4 h-4 mr-1.5 fill-current"/> Premium (Pro) Tier
+                            </div>
+                          ) : (
+                            <div className="inline-flex items-center bg-slate-100 border border-slate-200 text-slate-600 text-xs font-bold px-3 py-1.5 rounded-lg">
+                              <ShieldAlert className="w-4 h-4 mr-1.5"/> Free / Trial Tier
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* HASIL SOAL YANG DI-GENERATE */}
+                  <div className="bg-white rounded-2xl shadow-sm border p-8">
+                    <h3 className="font-bold text-slate-800 text-lg mb-6 border-b pb-3">Hasil Soal yang Dibuat</h3>
+                    <div className="space-y-10">
+                      {(() => {
+                        const grouped = (viewingDetail.questions || []).reduce((acc, q) => { const type = q.type || 'Lainnya'; if (!acc[type]) acc[type] = []; acc[type].push(q); return acc; }, {});
+                        let globalIndex = 1;
+                        return Object.keys(grouped).map(type => (
+                          <div key={type} className="mb-10">
+                            <div className="bg-slate-50 border-l-4 border-slate-400 px-4 py-2 mb-6 rounded-r-lg"><h4 className="font-bold text-slate-700 text-sm uppercase tracking-wide">{type}</h4></div>
+                            <div className="space-y-8">
+                              {grouped[type].map((q) => {
+                                const currentIndex = globalIndex++;
+                                return (
+                                  <div key={q.id} className="relative ml-2 sm:ml-4">
+                                    <div className="absolute -left-8 top-0 hidden sm:flex h-6 w-6 bg-slate-100 text-slate-600 rounded-full items-center justify-center text-xs font-bold">{currentIndex}</div>
+                                    <div className="flex flex-col sm:flex-row gap-6">
+                                      <div className="flex-1">
+                                        <div className="flex gap-2">
+                                          <span className="font-bold text-slate-800 sm:hidden">{currentIndex}.</span>
+                                          <div className="w-full text-sm font-medium text-slate-800">{q.text}</div>
+                                        </div>
+                                        {q.imageUrl && <div className="my-3"><img src={q.imageUrl} alt={`Ilustrasi`} className="w-48 h-auto rounded-lg border border-slate-200 shadow-sm" /></div>}
+                                        {q.options && q.options.length > 0 && (
+                                          <div className="mt-3 space-y-1.5 pl-4 sm:pl-0 text-sm">
+                                            {q.options.map((opt, i) => (
+                                              <div key={i} className={`flex items-start ${opt.includes(q.answer) ? 'text-green-600 font-bold' : 'text-slate-600'}`}>
+                                                {opt.includes(q.answer) && <CheckCircle2 className="w-4 h-4 mr-1.5 shrink-0 mt-0.5"/>}
+                                                <span>{opt}</span>
+                                              </div>
+                                            ))}
+                                          </div>
+                                        )}
+                                        <div className="mt-3 inline-block bg-indigo-50 border border-indigo-100 text-indigo-700 text-[10px] font-bold px-2 py-1 rounded">Target: {q.bloomLevel.split('(')[0].trim()}</div>
+                                      </div>
+                                    </div>
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          </div>
+                        ));
+                      })()}
+                    </div>
+                  </div>
+                </div>
+              ) : (
+                /* --- MODE ADMIN: MELIHAT DAFTAR RIWAYAT DARI SATU USER --- */
+                <div className="bg-white border rounded-xl shadow-sm overflow-hidden">
+                  <div className="p-4 bg-slate-50 border-b font-bold text-slate-700 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                    <div className="flex items-center text-indigo-700">
+                      <Clock className="w-5 h-5 mr-2" /> 
+                      Riwayat Log Aktivitas: <span className="text-slate-800 ml-1">{selectedUserHistory.name}</span>
+                    </div>
+                    <button onClick={() => setSelectedUserHistory(null)} className="text-sm bg-white border border-slate-300 px-4 py-2 rounded-lg hover:bg-slate-100 flex items-center font-medium shadow-sm transition-colors">
+                      <ChevronLeft className="w-4 h-4 mr-1"/> Kembali ke Daftar User
+                    </button>
+                  </div>
+                  <div className="overflow-x-auto">
+                    {userHistories.length === 0 ? (
+                      <div className="p-12 text-center text-slate-500">
+                        <FileText className="w-12 h-12 mx-auto mb-3 text-slate-300" />
+                        <p>Pengguna ini belum pernah meng-generate soal.</p>
+                      </div>
+                    ) : (
+                      <table className="w-full text-left text-sm">
+                        <thead className="bg-slate-100 text-slate-600"><tr><th className="p-4">Waktu Generate</th><th className="p-4">Mata Pelajaran</th><th className="p-4">Jenis Ujian</th><th className="p-4 text-center">Status Akun</th><th className="p-4 text-right">Detail Log</th></tr></thead>
+                        <tbody>
+                          {userHistories.map(hist => (
+                            <tr key={hist.id} className="border-b hover:bg-slate-50 transition-colors">
+                              <td className="p-4">
+                                <div className="font-bold text-slate-700">{new Date(hist.createdAt).toLocaleDateString('id-ID', {day: 'numeric', month: 'short', year: 'numeric'})}</div>
+                                <div className="text-xs text-slate-500">{new Date(hist.createdAt).toLocaleTimeString('id-ID')}</div>
+                              </td>
+                              <td className="p-4 font-medium text-slate-800">{hist.subject} <span className="text-slate-500 font-normal">(Kelas {hist.grade})</span></td>
+                              <td className="p-4 text-slate-600">{hist.examType}</td>
+                              <td className="p-4 text-center">
+                                {hist.isPremiumSnapshot 
+                                  ? <span className="bg-amber-100 text-amber-700 px-2 py-1 rounded text-xs font-bold">Pro</span>
+                                  : <span className="bg-slate-100 text-slate-600 px-2 py-1 rounded text-xs font-medium">Free</span>}
+                              </td>
+                              <td className="p-4 text-right">
+                                <button onClick={() => setViewingDetail(hist)} className="bg-indigo-50 text-indigo-600 hover:bg-indigo-100 border border-indigo-200 px-3 py-1.5 rounded-lg font-bold flex items-center justify-center ml-auto transition-colors">
+                                  <Eye className="w-4 h-4 mr-1" /> Periksa
+                                </button>
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    )}
+                  </div>
+                </div>
+              )
+            ) : (
+              /* --- MODE ADMIN: NORMAL USER LIST (DEFAULT) --- */
+              <div className="bg-white border rounded-xl shadow-sm overflow-hidden">
+                <div className="p-4 bg-slate-50 border-b font-bold text-slate-700 flex justify-between items-center">
+                  <span>Daftar Guru / Pengguna</span> 
+                  <span className="bg-slate-200 text-slate-700 px-3 py-1 rounded-full text-xs">Total: {allUsers.length} Akun</span>
+                </div>
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left text-sm">
+                    <thead className="bg-slate-100 text-slate-600"><tr><th className="p-4">Nama Lengkap</th><th className="p-4">Email</th><th className="p-4 text-center">Sisa Koin</th><th className="p-4 text-right">Aksi Audit</th></tr></thead>
+                    <tbody>
+                      {allUsers.map((u, i) => (
+                        <tr key={i} className="border-b hover:bg-slate-50 transition-colors">
+                          <td className="p-4 font-medium text-slate-800">{u.name} {u.isPremium && <span className="ml-2 bg-gradient-to-r from-amber-400 to-orange-500 text-white text-[10px] font-bold px-1.5 py-0.5 rounded uppercase">Pro</span>}</td>
+                          <td className="p-4 text-slate-500">{u.email}</td>
+                          <td className="p-4 text-center font-bold text-amber-600 text-lg">{u.coins}</td>
+                          <td className="p-4 text-right">
+                            <button onClick={() => setSelectedUserHistory(u)} className="bg-slate-800 text-white hover:bg-slate-700 px-3 py-1.5 rounded-lg font-bold flex items-center justify-center ml-auto shadow-sm transition-all">
+                              <Clock className="w-4 h-4 mr-1.5" /> Pantau Aktivitas
+                            </button>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            )}
           </div>
         )}
 
         {/* TAB: PENGATURAN PAKET & QR CODE */}
         {adminTab === 'settings' && (
-          <div className="space-y-6">
+          <div className="space-y-6 animate-in fade-in">
             <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center bg-white p-5 rounded-xl border shadow-sm gap-4">
               <div>
                 <h3 className="font-bold text-lg text-slate-800">Manajemen Paket & QR Code</h3>
@@ -251,15 +454,12 @@ export default function AdminPage() {
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
               {packages.map((pkg, index) => (
                 <div key={pkg.id} className={`bg-white rounded-2xl border-2 shadow-sm flex flex-col overflow-hidden transition-all ${pkg.isActive ? 'border-indigo-200 hover:border-indigo-400' : 'border-slate-200 opacity-75 grayscale-[30%]'}`}>
-                  {/* Header Card */}
                   <div className={`p-3 flex justify-between items-center ${pkg.isActive ? 'bg-indigo-50' : 'bg-slate-100'}`}>
                     <button onClick={() => updatePackage(index, 'isActive', !pkg.isActive)} className={`text-xs font-bold px-3 py-1.5 rounded-full flex items-center transition-colors ${pkg.isActive ? 'bg-green-100 text-green-700 hover:bg-green-200' : 'bg-slate-200 text-slate-600 hover:bg-slate-300'}`}>
                       {pkg.isActive ? <><Eye className="w-3 h-3 mr-1"/> Aktif</> : <><EyeOff className="w-3 h-3 mr-1"/> Nonaktif</>}
                     </button>
                     <button onClick={() => deletePackage(index)} className="text-red-500 hover:text-red-700 p-1"><Trash2 className="w-4 h-4"/></button>
                   </div>
-
-                  {/* Form Edit */}
                   <div className="p-5 space-y-4 flex-grow">
                     <div>
                       <label className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-1 block">Nama Paket</label>
@@ -287,8 +487,6 @@ export default function AdminPage() {
                         </select>
                       </div>
                     </div>
-                    
-                    {/* Upload QR per paket */}
                     <div className="pt-4 border-t border-slate-100">
                       <label className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-2 block text-center">QR Code Pembayaran</label>
                       <div className="flex flex-col items-center">
@@ -309,17 +507,10 @@ export default function AdminPage() {
                   </div>
                 </div>
               ))}
-              
-              {/* Tambah Paket Kosong Card */}
               <div onClick={addNewPackage} className="border-2 border-dashed border-slate-300 rounded-2xl flex flex-col items-center justify-center text-slate-500 hover:text-indigo-600 hover:border-indigo-400 hover:bg-indigo-50 cursor-pointer transition-all min-h-[400px]">
                 <Plus className="w-12 h-12 mb-2" />
                 <span className="font-bold">Buat Paket Baru</span>
               </div>
-            </div>
-            
-            <div className="bg-blue-50 text-blue-800 p-4 rounded-xl text-sm border border-blue-200 mt-6 flex items-start">
-              <AlertCircle className="w-5 h-5 mr-3 shrink-0 mt-0.5"/>
-              <p><b>Catatan Penting:</b> Jangan lupa menekan tombol <b>"Simpan Semua"</b> di pojok kanan atas layar setiap kali Anda mengubah, menambah, atau menghapus paket agar perubahannya dapat dilihat oleh pengguna (Guru).</p>
             </div>
           </div>
         )}
