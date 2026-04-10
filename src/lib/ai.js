@@ -1,8 +1,6 @@
 import { db } from './firebase';
 import { doc, getDoc } from 'firebase/firestore';
 
-// PERINGATAN KEAMANAN: 
-// OPENROUTER masih dipanggil di frontend, pastikan Limit Credit diatur.
 const OPENROUTER_API_KEY = process.env.NEXT_PUBLIC_OPENROUTER_API_KEY;
 
 // Menggunakan Model Gemini 3.1 Flash Lite Preview
@@ -140,43 +138,48 @@ export const callGeminiTextAPI = async (formData, isPremium = false, retries = 5
   }
 };
 
-// FUNGSI BARU: Sekarang meminta gambar ke server Backend kita sendiri secara aman
+// KEMBALI KE JALUR GRATIS (Frontend Request Tanpa API Key)
 export const callImagenAPI = async (promptText, retries = 4) => {
+  const finalPrompt = `cute, colorful cartoon style illustration for elementary school educational material. Highly relevant to the subject context. IF there are any written words or texts in the image, THEY MUST BE WRITTEN IN INDONESIAN. Child safe. Concept: ${promptText}`;
+  
   for (let i = 0; i < retries; i++) {
     const controller = new AbortController();
-    // Timeout 30 detik
-    const timeoutId = setTimeout(() => controller.abort(), 30000);
+    const timeoutId = setTimeout(() => controller.abort(), 20000); // Batas waktu tunggu 20 detik per gambar
 
     try {
+      const randomSeed = Math.floor(Math.random() * 1000000);
+      
+      // Memanggil URL publik gratis dari Pollinations tanpa parameter key
+      const imageUrl = `https://image.pollinations.ai/prompt/${encodeURIComponent(finalPrompt)}?width=400&height=400&nologo=true&seed=${randomSeed}`;
+      
       if (i > 0) {
         console.warn(`Mengulang pemuatan gambar... Percobaan ke-${i+1}`);
         await new Promise(r => setTimeout(r, 2000 * i)); 
       }
 
-      // Menembak request ke backend internal kita sendiri (AMAN)
-      const response = await fetch('/api/generate-image', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ prompt: promptText }),
+      const response = await fetch(imageUrl, { 
+        referrerPolicy: "no-referrer",
         signal: controller.signal
       });
       
       clearTimeout(timeoutId);
       
-      const data = await response.json();
+      if (!response.ok) throw new Error(`HTTP Error ${response.status}`);
       
-      if (!response.ok || !data.success) {
-        throw new Error(data.error || `HTTP Error ${response.status}`);
-      }
+      const blob = await response.blob();
       
-      // Data yang dikembalikan sudah berupa Base64 Image
-      return data.image;
+      return await new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onloadend = () => resolve(reader.result);
+        reader.onerror = reject;
+        reader.readAsDataURL(blob);
+      });
       
     } catch (error) {
       clearTimeout(timeoutId);
       if (i === retries - 1) {
-        console.error("Gagal total mengonversi gambar:", error);
-        return null; 
+        console.error("Gagal total mengonversi gambar setelah beberapa percobaan:", error);
+        return null; // Tetap kembalikan null agar soal tetap tampil meskipun gambarnya gagal dimuat
       }
     }
   }
