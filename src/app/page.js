@@ -6,12 +6,13 @@ import Link from 'next/link';
 import { 
   BookOpen, Upload, Settings, Wand2, Download, ChevronRight, 
   FileText, CheckCircle2, AlertCircle, Loader2, LogOut, 
-  Coins, CreditCard, X, ShieldCheck, Image as ImageIcon, Users, Check, Lock, ShieldAlert
+  Coins, CreditCard, X, ShieldCheck, Image as ImageIcon, Users, Check, Lock, ShieldAlert,
+  Clock, Eye // Tambahan Ikon Baru untuk Dashboard
 } from 'lucide-react';
 
 import { auth, db } from '../lib/firebase';
 import { onAuthStateChanged, signOut } from 'firebase/auth';
-import { doc, setDoc, onSnapshot, updateDoc, increment } from 'firebase/firestore';
+import { doc, setDoc, onSnapshot, updateDoc, increment, collection, addDoc } from 'firebase/firestore';
 import { analyzeBloomWithAI, callGeminiTextAPI, callImagenAPI } from '../lib/ai';
 import { exportToWord } from '../lib/exportWord';
 
@@ -19,13 +20,16 @@ const appId = 'eduquest-pro';
 
 export default function Home() {
   const router = useRouter(); 
-  const [appState, setAppState] = useState('FORM');
+  const [appState, setAppState] = useState('DASHBOARD'); // Default state diubah ke DASHBOARD
   const [user, setUser] = useState(null);
   const [coins, setCoins] = useState(0);
-  const [isPremium, setIsPremium] = useState(false); // STATE BARU UNTUK PREMIUM
+  const [isPremium, setIsPremium] = useState(false); 
   const [errorMsg, setErrorMsg] = useState('');
   
-  // State Form Generate (Diperbarui dengan opsi soal baru)
+  // State History/Riwayat Soal
+  const [historyData, setHistoryData] = useState([]);
+
+  // State Form Generate
   const [formData, setFormData] = useState({
     subject: 'Matematika', grade: '1', examType: 'Asesmen Formatif',
     bloomLevels: [
@@ -81,7 +85,7 @@ export default function Home() {
       if (docSnap.exists()) {
         const data = docSnap.data();
         setCoins(data.coins);
-        setIsPremium(data.isPremium || false); // Cek status premium
+        setIsPremium(data.isPremium || false); 
       } else {
         setDoc(userDocRef, { name: user.name, email: user.email, coins: 20, isPremium: false, createdAt: new Date().toISOString() });
         setCoins(20);
@@ -91,14 +95,26 @@ export default function Home() {
     return () => unsubUser();
   }, [user]);
 
+  // --- LOGIKA MENGAMBIL RIWAYAT GENERATE SOAL (HISTORY) ---
+  useEffect(() => {
+    if (!user) return;
+    const historyColRef = collection(db, 'artifacts', appId, 'users', user.uid, 'history');
+    const unsubHistory = onSnapshot(historyColRef, (snapshot) => {
+      const docs = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
+      // Urutkan riwayat dari yang terbaru
+      docs.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+      setHistoryData(docs);
+    }, (error) => console.error("Gagal memuat riwayat:", error));
+    
+    return () => unsubHistory();
+  }, [user]);
+
   // --- PAKSA ATURAN FREE USER JIKA STATUS BERUBAH ---
   useEffect(() => {
     if (!isPremium) {
       setFormData(prev => ({
         ...prev,
-        // Kunci hanya di Pilihan Ganda
         questionTypes: prev.questionTypes.map(t => t.id === 'pg' ? { ...t, checked: true } : { ...t, checked: false }),
-        // Hapus centang bloom
         bloomLevels: prev.bloomLevels.map(b => ({ ...b, checked: false }))
       }));
     }
@@ -150,8 +166,22 @@ export default function Home() {
           }
         }
       } else {
-        // Jika free, langsung masukkan tanpa digambar
         generatedQuestions.forEach(q => questionsWithImages.push(q));
+      }
+
+      // SIMPAN HASIL KE RIWAYAT (HISTORY) FIRESTORE
+      try {
+        const historyColRef = collection(db, 'artifacts', appId, 'users', user.uid, 'history');
+        await addDoc(historyColRef, {
+          subject: formData.subject,
+          grade: formData.grade,
+          examType: formData.examType,
+          createdAt: new Date().toISOString(),
+          questions: questionsWithImages,
+          formData: formData
+        });
+      } catch (e) {
+        console.error("Gagal menyimpan ke riwayat:", e);
       }
 
       setQuestions(questionsWithImages);
@@ -177,7 +207,6 @@ export default function Home() {
     const file = e.target.files[0];
     if (!file) return;
     
-    // Validasi User Free dilarang upload PDF
     if (file.type === 'application/pdf' && !isPremium) {
       showError("Versi Free tidak dapat mengunggah PDF. Harap salin-tempel teks secara manual atau Upgrade Pro.");
       e.target.value = null;
@@ -222,9 +251,9 @@ export default function Home() {
   if (!user) return <div className="min-h-screen flex items-center justify-center bg-slate-50"><Loader2 className="w-8 h-8 animate-spin text-blue-600"/></div>;
 
   return (
-    <div className="min-h-screen bg-slate-50 text-slate-900 font-sans">
+    <div className="min-h-screen bg-slate-50 text-slate-900 font-sans pb-20">
       {errorMsg && (
-        <div className="fixed top-4 right-4 z-50 bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded-lg shadow-lg flex items-center space-x-2 animate-in fade-in">
+        <div className="fixed top-4 right-4 z-50 bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded-lg shadow-lg flex items-center space-x-2 animate-in fade-in z-50">
           <AlertCircle size={20} /> <span className="font-medium text-sm">{errorMsg}</span>
         </div>
       )}
@@ -232,7 +261,7 @@ export default function Home() {
       {/* HEADER */}
       <header className="bg-white border-b border-slate-200 sticky top-0 z-40 shadow-sm">
         <div className="max-w-6xl mx-auto px-4 h-16 flex items-center justify-between">
-          <div className="flex items-center space-x-2 text-blue-600 cursor-pointer" onClick={() => { if(user) setAppState('FORM') }}>
+          <div className="flex items-center space-x-2 text-blue-600 cursor-pointer" onClick={() => { if(user) setAppState('DASHBOARD') }}>
             <Wand2 className="w-8 h-8" />
             <span className="text-xl font-bold tracking-tight hidden sm:block">EduQuest<span className="text-slate-800">.ai</span></span>
             {isPremium && <span className="ml-2 bg-gradient-to-r from-amber-400 to-orange-500 text-white text-[10px] font-bold px-2 py-0.5 rounded-full uppercase tracking-wider hidden md:block">Pro</span>}
@@ -246,7 +275,6 @@ export default function Home() {
                 <Link href="/payment" className="ml-3 text-xs flex items-center bg-amber-500 hover:bg-amber-600 text-white px-2 py-0.5 rounded transition-colors">+ Top Up</Link>
               </div>
               
-              {/* --- TOMBOL PANDUAN --- */}
               <Link href="/panduan" className="text-slate-500 hover:text-blue-600 flex items-center text-sm font-medium transition-colors">
                 <BookOpen className="w-4 h-4 sm:mr-1" /> <span className="hidden sm:inline-block">Panduan</span>
               </Link>
@@ -262,8 +290,8 @@ export default function Home() {
 
       <main className="max-w-6xl mx-auto px-4 py-8">
         
-        {/* BANNER FREE USER */}
-        {!isPremium && appState === 'FORM' && (
+        {/* BANNER FREE USER (Muncul di Dashboard dan Form) */}
+        {!isPremium && (appState === 'FORM' || appState === 'DASHBOARD') && (
           <div className="bg-gradient-to-r from-amber-100 to-orange-50 border border-amber-200 p-4 sm:p-5 rounded-2xl mb-8 flex flex-col sm:flex-row items-start sm:items-center justify-between shadow-sm animate-in fade-in">
             <div className="flex items-start sm:items-center mb-4 sm:mb-0">
               <ShieldAlert className="w-8 h-8 text-amber-600 mr-3 shrink-0" />
@@ -278,9 +306,87 @@ export default function Home() {
           </div>
         )}
 
-        {/* MAIN FORM GENERATE (USER) */}
+        {/* --- DASHBOARD VIEW (HALAMAN UTAMA SETELAH LOGIN) --- */}
+        {appState === 'DASHBOARD' && (
+          <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4">
+            
+            {/* Kartu Welcome & Quick Action */}
+            <div className="bg-white rounded-3xl p-8 border border-slate-200 shadow-sm flex flex-col md:flex-row items-center justify-between gap-6 relative overflow-hidden">
+              <div className="absolute top-0 right-0 w-64 h-64 bg-blue-50 rounded-full blur-3xl -z-10 transform translate-x-1/2 -translate-y-1/2"></div>
+              <div>
+                <h1 className="text-3xl font-extrabold text-slate-800 mb-2">Halo, {user.name}! 👋</h1>
+                <p className="text-slate-600 text-lg">Selamat datang di Dasbor EduQuest. Apa yang ingin Anda buat hari ini?</p>
+              </div>
+              <button onClick={() => setAppState('FORM')} className="w-full md:w-auto bg-blue-600 hover:bg-blue-700 text-white px-8 py-4 rounded-xl font-bold transition-all shadow-md hover:shadow-lg flex items-center justify-center shrink-0">
+                <Wand2 className="w-5 h-5 mr-2" /> Buat Soal Baru
+              </button>
+            </div>
+
+            {/* Tabel Riwayat (History) */}
+            <div className="bg-white rounded-3xl shadow-sm border border-slate-200 overflow-hidden">
+               <div className="p-6 border-b border-slate-200 flex items-center justify-between bg-slate-50/50">
+                 <h2 className="text-lg font-bold text-slate-800 flex items-center">
+                   <Clock className="w-5 h-5 mr-2 text-blue-500"/> Riwayat Pembuatan Soal
+                 </h2>
+               </div>
+               <div className="p-0 overflow-x-auto">
+                 {historyData.length === 0 ? (
+                    <div className="p-16 text-center text-slate-500">
+                      <FileText className="w-16 h-16 mx-auto mb-4 text-slate-300" />
+                      <p className="text-lg font-medium text-slate-600">Belum ada riwayat soal.</p>
+                      <p className="text-sm mt-1">Buat soal pertama Anda dan semuanya akan tersimpan otomatis di sini!</p>
+                    </div>
+                 ) : (
+                    <table className="w-full text-left text-sm">
+                      <thead className="bg-slate-100 text-slate-600 uppercase text-xs tracking-wider">
+                        <tr>
+                          <th className="p-4 font-bold">Waktu Dibuat</th>
+                          <th className="p-4 font-bold">Mata Pelajaran</th>
+                          <th className="p-4 font-bold">Kelas</th>
+                          <th className="p-4 font-bold">Jenis Ujian</th>
+                          <th className="p-4 text-center font-bold">Jml Soal</th>
+                          <th className="p-4 text-right font-bold">Aksi</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {historyData.map(item => (
+                          <tr key={item.id} className="border-b border-slate-100 hover:bg-blue-50/50 transition-colors">
+                            <td className="p-4 text-slate-600">
+                              {new Date(item.createdAt).toLocaleDateString('id-ID', {day: 'numeric', month: 'short', year: 'numeric'})} <br/>
+                              <span className="text-xs text-slate-400">{new Date(item.createdAt).toLocaleTimeString('id-ID', {hour: '2-digit', minute: '2-digit'})}</span>
+                            </td>
+                            <td className="p-4 font-bold text-slate-800">{item.subject}</td>
+                            <td className="p-4 text-slate-600 font-medium">Kelas {item.grade}</td>
+                            <td className="p-4 text-slate-600">{item.examType}</td>
+                            <td className="p-4 text-center text-slate-600">
+                              <span className="bg-blue-100 text-blue-700 px-3 py-1 rounded-lg text-xs font-bold">{item.questions?.length || 0}</span>
+                            </td>
+                            <td className="p-4 text-right">
+                              <button 
+                                onClick={() => {
+                                  // Muat ulang data dari history ke layar preview
+                                  setFormData(item.formData);
+                                  setQuestions(item.questions);
+                                  setAppState('PREVIEW');
+                                }}
+                                className="text-indigo-600 hover:text-indigo-800 font-bold text-xs bg-indigo-50 hover:bg-indigo-100 px-4 py-2 rounded-lg transition-colors inline-flex items-center"
+                              >
+                                <Eye className="w-4 h-4 mr-2"/> Lihat Soal
+                              </button>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                 )}
+               </div>
+            </div>
+          </div>
+        )}
+
+        {/* --- MAIN FORM GENERATE --- */}
         {appState === 'FORM' && (
-           <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+           <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 animate-in fade-in slide-in-from-bottom-4">
             <div className="lg:col-span-1 space-y-6">
               <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-6 relative overflow-hidden">
                 <h2 className="text-lg font-bold text-slate-800 mb-4 flex items-center"><Settings className="w-5 h-5 mr-2 text-blue-500" /> Parameter Soal</h2>
@@ -399,9 +505,9 @@ export default function Home() {
           </div>
         )}
 
-        {/* LOADING & PREVIEW STATES */}
+        {/* --- LOADING STATE --- */}
         {appState === 'LOADING' && (
-          <div className="py-24 flex flex-col items-center justify-center text-center">
+          <div className="py-24 flex flex-col items-center justify-center text-center animate-in fade-in">
             <div className="relative">
               <div className="w-24 h-24 border-4 border-blue-100 rounded-full animate-spin border-t-blue-600"></div>
               <div className="absolute inset-0 flex items-center justify-center"><Wand2 className="w-8 h-8 text-blue-600 animate-pulse" /></div>
@@ -411,16 +517,18 @@ export default function Home() {
           </div>
         )}
 
+        {/* --- PREVIEW STATE (HASIL SOAL) --- */}
         {appState === 'PREVIEW' && (
           <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4">
             <div className="bg-white rounded-2xl shadow-sm border p-4 flex flex-col sm:flex-row items-center justify-between gap-4 sticky top-20 z-30">
               <div className="flex items-center space-x-3 text-slate-700">
                 <CheckCircle2 className="w-6 h-6 text-green-500" />
-                <span className="font-medium">Selesai! {questions.length} soal dibuat. (Sisa Koin: {coins})</span>
+                <span className="font-medium">Selesai! {questions.length} soal dibuat.</span>
               </div>
               <div className="flex space-x-3 w-full sm:w-auto">
-                <button onClick={() => setAppState('FORM')} className="px-4 py-2 bg-slate-100 hover:bg-slate-200 rounded-lg text-sm font-medium">Buat Soal Baru</button>
-                <button onClick={() => exportToWord(formData, questions, coins, showError)} className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-medium flex items-center"><Download className="w-4 h-4 mr-2" /> Unduh .doc</button>
+                <button onClick={() => setAppState('DASHBOARD')} className="px-4 py-2 bg-white hover:bg-slate-50 border border-slate-200 rounded-lg text-sm font-bold text-slate-600 transition-colors">Ke Dasbor</button>
+                <button onClick={() => setAppState('FORM')} className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg text-sm font-bold transition-colors">Buat Baru</button>
+                <button onClick={() => exportToWord(formData, questions, coins, showError)} className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-bold flex items-center shadow-sm"><Download className="w-4 h-4 mr-2" /> Unduh .doc</button>
               </div>
             </div>
 
