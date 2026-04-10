@@ -27,8 +27,10 @@ const fetchAiRoleFromDB = async () => {
 export const analyzeBloomWithAI = async (levels, data, isPremium = false, retries = 3) => {
   if (!isPremium) return "Fitur Analisis AI Taksonomi Bloom khusus untuk pengguna Premium.";
 
-  const materiContext = data.rppText.trim() ? `\n- Materi/Modul Ajar:\n"${data.rppText.substring(0, 1000)}..."` : `\n- Materi/Modul Ajar: (Belum ada materi)`;
-  const prompt = `Anda ahli kurikulum SD. Analisis SANGAT SINGKAT pilihan Taksonomi Bloom: [${levels.join(', ')}]. Konteks: Kelas ${data.grade} SD, Mapel ${data.subject}, Ujian ${data.examType}. ${materiContext} Respons WAJIB berupa 1-2 kalimat saja, gunakan teks bersih: - Jika sesuai: Berikan validasi singkat. - Jika kurang tepat: Awali dengan "⚠️ REKOMENDASI:", sebutkan tingkat yang seharusnya dan alasan 1 kalimat.`;
+  const materiContext = data.rppText?.trim() ? `\n- Materi/Modul Ajar:\n"${data.rppText.substring(0, 1000)}..."` : `\n- Materi/Modul Ajar: (Belum ada materi)`;
+  const kisiContext = data.kisiText?.trim() ? `\n- Kisi-Kisi Acuan:\n"${data.kisiText.substring(0, 1000)}..."` : '';
+  
+  const prompt = `Anda ahli kurikulum SD. Analisis SANGAT SINGKAT pilihan Taksonomi Bloom: [${levels.join(', ')}]. Konteks: Kelas ${data.grade} SD, Mapel ${data.subject}, Ujian ${data.examType}. ${materiContext} ${kisiContext} Respons WAJIB berupa 1-2 kalimat saja, gunakan teks bersih: - Jika sesuai: Berikan validasi singkat. - Jika kurang tepat: Awali dengan "⚠️ REKOMENDASI:", sebutkan tingkat yang seharusnya dan alasan 1 kalimat.`;
   
   const url = `https://openrouter.ai/api/v1/chat/completions`;
   
@@ -83,6 +85,9 @@ export const callGeminiTextAPI = async (formData, isPremium = false, retries = 5
 
   const systemRole = await fetchAiRoleFromDB();
 
+  const materiContext = formData.rppText?.trim() ? `Materi Sumber:\n"""\n${formData.rppText.substring(0, 3000)}\n"""\n` : '';
+  const kisiContext = formData.kisiText?.trim() ? `Kisi-Kisi Acuan:\n"""\n${formData.kisiText.substring(0, 3000)}\n"""\n(PASTIKAN soal yang Anda buat BENAR-BENAR MENGIKUTI acuan indikator pada kisi-kisi ini!)\n` : '';
+
   const prompt = `${systemRole}
   
   TUGAS SAAT INI:
@@ -90,7 +95,8 @@ export const callGeminiTextAPI = async (formData, isPremium = false, retries = 5
   Fokus HANYA pada Taksonomi Bloom: ${activeBlooms}. 
   Komposisi SOAL WAJIB: \n${typesInstruction}
   
-  Materi Sumber: """${formData.rppText.substring(0, 3000)}"""
+  ${materiContext}
+  ${kisiContext}
   
   Respons HANYA format JSON murni tanpa awalan/akhiran markdown:
   { "questions": [ { "id": "q1", "type": "Pilihan Ganda", "text": "Teks soal...", "options": ["A. Opsi 1"], "answer": "Jawaban", "bloomLevel": "Pilih satu Bloom", ${imageInstruction} } ] }`;
@@ -141,7 +147,7 @@ export const callGeminiTextAPI = async (formData, isPremium = false, retries = 5
 
 // --- FUNGSI BARU: GENERATE KISI-KISI SOAL ---
 export const callGeminiKisiKisiAPI = async (formData, isPremium = false, retries = 5) => {
-  // Hitung ulang total semua jenis soal dari versi form yang sudah di-update
+  // Hitung ulang total semua jenis soal dari form yang sudah di-update
   const totalSoal = parseInt(formData.pgCount||0) + parseInt(formData.esaiCount||0) + parseInt(formData.bsCount||0) + parseInt(formData.jodohCount||0) + parseInt(formData.ceritaCount||0);
   
   // Validasi Limit Free User
@@ -174,7 +180,7 @@ export const callGeminiKisiKisiAPI = async (formData, isPremium = false, retries
   1. Buat indikator soal yang spesifik, operasional (menggunakan KKO yang tepat), dan logis berdasarkan materi.
   2. Distribusikan level kognitif secara proporsional (gabungan dari L1/C1-C2, L2/C3, L3/C4-C6).
   3. Indikator biasanya berbunyi seperti: "Disajikan sebuah teks/gambar..., siswa dapat menentukan..."
-  4. Total baris kisi-kisi harus TEPAT ${totalSoal} baris (sesuai total jumlah dari semua tipe soal di atas).
+  4. Total baris kisi-kisi harus TEPAT ${totalSoal} baris (sesuai jumlah total dari semua jenis soal yang di-request).
   
   Respons WAJIB dalam format JSON murni TANPA awalan/akhiran markdown atau teks apapun:
   {
@@ -223,7 +229,7 @@ export const callGeminiKisiKisiAPI = async (formData, isPremium = false, retries
       let jsonText = data.choices?.[0]?.message?.content;
       if (!jsonText) throw new Error("Format respons AI kosong atau tidak valid.");
       
-      // Bersihkan markdown jika ada
+      // Bersihkan markdown jika terbawa
       jsonText = jsonText.replace(/```json/g, '').replace(/```/g, '').trim();
       
       const parsedData = JSON.parse(jsonText);
@@ -239,7 +245,7 @@ export const callGeminiKisiKisiAPI = async (formData, isPremium = false, retries
   }
 };
 
-// --- FUNGSI GENERATE GAMBAR (POLLINATIONS AI) ---
+// Menggunakan Mode Frontend (Public Url) agar Gratis tanpa Rate Limit IP Server
 export const callImagenAPI = async (promptText, retries = 4) => {
   const finalPrompt = `cute, colorful cartoon style illustration for elementary school educational material. Highly relevant to the subject context. IF there are any written words or texts in the image, THEY MUST BE WRITTEN IN INDONESIAN. Child safe. Concept: ${promptText}`;
   
