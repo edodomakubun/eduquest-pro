@@ -28,15 +28,19 @@ export default function GenerateKisiPage() {
   const [masterSubjects, setMasterSubjects] = useState(['Matematika']); 
   const [isLoadingMaster, setIsLoadingMaster] = useState(true);
   
+  // State Form ditambahkan opsi Benar Salah, Menjodohkan, dan Cerita
   const [formData, setFormData] = useState({
-    subject: 'Matematika', 
+    subject: 'Pendidikan Agama Kristen', 
     grade: '1 (Fase A)', 
     curriculum: 'Kurikulum Merdeka',
     teacherName: '',
     cpText: '',
     materiText: '',
     pgCount: 5,
-    esaiCount: 5
+    esaiCount: 5,
+    bsCount: 0,
+    jodohCount: 0,
+    ceritaCount: 0
   });
 
   const [kisiData, setKisiData] = useState([]);
@@ -55,15 +59,30 @@ export default function GenerateKisiPage() {
     } catch (error) { return 'denied'; }
   };
 
-  // --- FETCH MASTER DATA ---
+  // --- FETCH MASTER DATA & INJEKSI MAPEL AGAMA ---
   useEffect(() => {
     const masterRef = doc(db, 'artifacts', appId, 'public', 'data', 'settings', 'master_data');
     const unsubMaster = onSnapshot(masterRef, (docSnap) => {
+      let fetchedSubjects = [];
       if (docSnap.exists()) {
-        const data = docSnap.data();
-        setMasterSubjects(data.subjects || []);
-        setFormData(prev => ({ ...prev, subject: data.subjects && data.subjects.length > 0 ? data.subjects[0] : 'Matematika' }));
+        fetchedSubjects = docSnap.data().subjects || [];
       }
+      
+      // Injeksi otomatis Mata Pelajaran Agama jika Admin belum memasukkannya
+      const requiredSubjects = ['Pendidikan Agama Kristen', 'Pendidikan Agama Islam'];
+      requiredSubjects.forEach(req => {
+        if (!fetchedSubjects.includes(req)) {
+          fetchedSubjects.push(req);
+        }
+      });
+
+      setMasterSubjects(fetchedSubjects);
+      
+      setFormData(prev => ({ 
+        ...prev, 
+        subject: fetchedSubjects.includes(prev.subject) ? prev.subject : fetchedSubjects[0] 
+      }));
+      
       setIsLoadingMaster(false);
     });
     return () => unsubMaster();
@@ -111,7 +130,8 @@ export default function GenerateKisiPage() {
   const showError = (msg) => { setErrorMsg(msg); setTimeout(() => setErrorMsg(''), 5000); };
 
   const generateKisiKisi = async () => {
-    const totalSoal = parseInt(formData.pgCount) + parseInt(formData.esaiCount);
+    const totalSoal = parseInt(formData.pgCount||0) + parseInt(formData.esaiCount||0) + parseInt(formData.bsCount||0) + parseInt(formData.jodohCount||0) + parseInt(formData.ceritaCount||0);
+    
     if (!formData.cpText.trim()) return showError('Capaian Pembelajaran (CP) wajib diisi.');
     if (!formData.materiText.trim()) return showError('Lingkup Materi wajib diisi.');
     if (!formData.teacherName.trim()) return showError('Nama Penyusun wajib diisi.');
@@ -137,10 +157,8 @@ export default function GenerateKisiPage() {
     setLoadingStatus(`Merancang dan memetakan indikator untuk ${totalSoal} soal...`);
 
     try {
-      // Panggil AI
       const generatedKisi = await callGeminiKisiKisiAPI(formData, isPremium);
       
-      // Simpan riwayat
       try {
         const historyColRef = collection(db, 'artifacts', appId, 'public', 'data', 'history', user.uid, 'saved_exams');
         await addDoc(historyColRef, {
@@ -162,6 +180,8 @@ export default function GenerateKisiPage() {
       setAppState('FORM'); 
     }
   };
+
+  const totalSoalCount = parseInt(formData.pgCount||0) + parseInt(formData.esaiCount||0) + parseInt(formData.bsCount||0) + parseInt(formData.jodohCount||0) + parseInt(formData.ceritaCount||0);
 
   if (!user || isLoadingMaster) return <div className="min-h-screen flex items-center justify-center bg-slate-50"><Loader2 className="w-8 h-8 animate-spin text-blue-600"/></div>;
 
@@ -222,18 +242,32 @@ export default function GenerateKisiPage() {
                     <input type="text" value={formData.teacherName} onChange={(e) => setFormData({...formData, teacherName: e.target.value})} placeholder="Masukkan nama Anda" className="w-full border border-slate-300 rounded-lg px-3 py-2 outline-none focus:ring-2 focus:ring-indigo-500 font-medium" />
                   </div>
                   <div className="border-t border-slate-200 pt-4 mt-2">
-                    <label className="flex items-center justify-between text-sm font-medium text-slate-700 mb-2"><span>Komposisi Jumlah Soal</span>{!isPremium && <Lock className="w-3 h-3 text-slate-400" />}</label>
-                    <div className="grid grid-cols-2 gap-4">
-                      <div className="bg-slate-50 border p-3 rounded-xl flex flex-col items-center">
-                        <span className="text-xs text-slate-500 font-bold uppercase mb-1">Pilihan Ganda</span>
-                        <input type="number" min="0" max={!isPremium ? 10 : 50} value={formData.pgCount} onChange={(e) => setFormData({...formData, pgCount: parseInt(e.target.value)||0})} className="w-16 border rounded px-2 py-1 outline-none text-center font-bold text-slate-700" />
+                    <label className="flex items-center justify-between text-sm font-medium text-slate-700 mb-3"><span>Komposisi Jumlah Soal</span>{!isPremium && <Lock className="w-3 h-3 text-slate-400" />}</label>
+                    
+                    {/* UI KOMPOSISI SOAL TERBARU */}
+                    <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+                      <div className="bg-slate-50 border border-slate-200 p-2.5 rounded-xl flex flex-col items-center">
+                        <span className="text-[10px] text-slate-500 font-bold uppercase mb-1 text-center">Pil. Ganda</span>
+                        <input type="number" min="0" max={!isPremium ? 10 : 50} value={formData.pgCount} onChange={(e) => setFormData({...formData, pgCount: parseInt(e.target.value)||0})} className="w-14 border border-slate-300 rounded px-1 py-1 outline-none text-center font-bold text-slate-700" />
                       </div>
-                      <div className="bg-slate-50 border p-3 rounded-xl flex flex-col items-center">
-                        <span className="text-xs text-slate-500 font-bold uppercase mb-1">Uraian/Esai</span>
-                        <input type="number" min="0" max={!isPremium ? 10 : 50} value={formData.esaiCount} onChange={(e) => setFormData({...formData, esaiCount: parseInt(e.target.value)||0})} className="w-16 border rounded px-2 py-1 outline-none text-center font-bold text-slate-700" />
+                      <div className="bg-slate-50 border border-slate-200 p-2.5 rounded-xl flex flex-col items-center">
+                        <span className="text-[10px] text-slate-500 font-bold uppercase mb-1 text-center">Esai</span>
+                        <input type="number" min="0" max={!isPremium ? 10 : 50} value={formData.esaiCount} onChange={(e) => setFormData({...formData, esaiCount: parseInt(e.target.value)||0})} className="w-14 border border-slate-300 rounded px-1 py-1 outline-none text-center font-bold text-slate-700" />
+                      </div>
+                      <div className="bg-slate-50 border border-slate-200 p-2.5 rounded-xl flex flex-col items-center">
+                        <span className="text-[10px] text-slate-500 font-bold uppercase mb-1 text-center">Benar/Salah</span>
+                        <input type="number" min="0" max={!isPremium ? 10 : 50} value={formData.bsCount} onChange={(e) => setFormData({...formData, bsCount: parseInt(e.target.value)||0})} className="w-14 border border-slate-300 rounded px-1 py-1 outline-none text-center font-bold text-slate-700" />
+                      </div>
+                      <div className="bg-slate-50 border border-slate-200 p-2.5 rounded-xl flex flex-col items-center">
+                        <span className="text-[10px] text-slate-500 font-bold uppercase mb-1 text-center">Jodohkan</span>
+                        <input type="number" min="0" max={!isPremium ? 10 : 50} value={formData.jodohCount} onChange={(e) => setFormData({...formData, jodohCount: parseInt(e.target.value)||0})} className="w-14 border border-slate-300 rounded px-1 py-1 outline-none text-center font-bold text-slate-700" />
+                      </div>
+                      <div className="bg-slate-50 border border-slate-200 p-2.5 rounded-xl flex flex-col items-center">
+                        <span className="text-[10px] text-slate-500 font-bold uppercase mb-1 text-center">Soal Cerita</span>
+                        <input type="number" min="0" max={!isPremium ? 10 : 50} value={formData.ceritaCount} onChange={(e) => setFormData({...formData, ceritaCount: parseInt(e.target.value)||0})} className="w-14 border border-slate-300 rounded px-1 py-1 outline-none text-center font-bold text-slate-700" />
                       </div>
                     </div>
-                    {!isPremium && (formData.pgCount + formData.esaiCount > 10) && <p className="text-xs text-red-500 mt-2 font-medium flex items-center"><AlertCircle className="w-3 h-3 mr-1"/> Free maks 10 soal total.</p>}
+                    {!isPremium && (totalSoalCount > 10) && <p className="text-xs text-red-500 mt-3 font-medium flex items-center"><AlertCircle className="w-3 h-3 mr-1"/> Free maks 10 soal total.</p>}
                   </div>
                 </div>
               </div>
@@ -264,7 +298,7 @@ export default function GenerateKisiPage() {
                   </div>
                   <div className="flex items-center space-x-4 w-full sm:w-auto">
                     <span className="text-sm font-bold text-amber-700 hidden sm:block">10 Koin / Gen</span>
-                    <button onClick={generateKisiKisi} disabled={(!isPremium && (formData.pgCount + formData.esaiCount > 10))} className="w-full sm:w-auto bg-indigo-600 hover:bg-indigo-700 disabled:bg-slate-300 text-white font-bold py-3 px-8 rounded-xl flex items-center justify-center transition-all shadow-sm">
+                    <button onClick={generateKisiKisi} disabled={(!isPremium && (totalSoalCount > 10))} className="w-full sm:w-auto bg-indigo-600 hover:bg-indigo-700 disabled:bg-slate-300 text-white font-bold py-3 px-8 rounded-xl flex items-center justify-center transition-all shadow-sm">
                       <LayoutGrid className="w-5 h-5 mr-2" /> Generate Kisi-Kisi
                     </button>
                   </div>
@@ -303,7 +337,18 @@ export default function GenerateKisiPage() {
                   <div><span className="text-slate-500">Kelas / Fase:</span> <br/>{formData.grade}</div>
                   <div><span className="text-slate-500">Kurikulum:</span> <br/>{formData.curriculum}</div>
                   <div><span className="text-slate-500">Penyusun:</span> <br/>{formData.teacherName}</div>
-                  <div className="col-span-2"><span className="text-slate-500">Jumlah Soal:</span> <br/>{parseInt(formData.pgCount) + parseInt(formData.esaiCount)} Soal ({formData.pgCount} PG, {formData.esaiCount} Esai)</div>
+                  <div className="col-span-2">
+                    <span className="text-slate-500">Jumlah Soal:</span> <br/>
+                    {totalSoalCount} Soal (
+                      {[
+                        formData.pgCount > 0 ? `${formData.pgCount} PG` : null,
+                        formData.esaiCount > 0 ? `${formData.esaiCount} Esai` : null,
+                        formData.bsCount > 0 ? `${formData.bsCount} BS` : null,
+                        formData.jodohCount > 0 ? `${formData.jodohCount} Jodohkan` : null,
+                        formData.ceritaCount > 0 ? `${formData.ceritaCount} Cerita` : null
+                      ].filter(Boolean).join(', ')}
+                    )
+                  </div>
                 </div>
               </div>
               

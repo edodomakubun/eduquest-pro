@@ -1,6 +1,6 @@
 export const exportToWordKisiKisi = (formData, kisiData, coins, showError) => {
   try {
-    const totalSoal = parseInt(formData.pgCount) + parseInt(formData.esaiCount);
+    const totalSoal = parseInt(formData.pgCount||0) + parseInt(formData.esaiCount||0) + parseInt(formData.bsCount||0) + parseInt(formData.jodohCount||0) + parseInt(formData.ceritaCount||0);
 
     let wordHTML = `
       <html xmlns:o='urn:schemas-microsoft-com:office:office' xmlns:w='urn:schemas-microsoft-com:office:word' xmlns='http://www.w3.org/TR/REC-html40'>

@@ -23,6 +23,7 @@ const fetchAiRoleFromDB = async () => {
   return "Anda adalah asisten pembuat soal ujian untuk Guru SD di Indonesia. Pastikan bahasa mudah dipahami oleh anak Sekolah Dasar.";
 };
 
+// --- FUNGSI ANALISIS TAKSONOMI BLOOM ---
 export const analyzeBloomWithAI = async (levels, data, isPremium = false, retries = 3) => {
   if (!isPremium) return "Fitur Analisis AI Taksonomi Bloom khusus untuk pengguna Premium.";
 
@@ -66,6 +67,7 @@ export const analyzeBloomWithAI = async (levels, data, isPremium = false, retrie
   }
 };
 
+// --- FUNGSI GENERATE SOAL UJIAN (TEKS) ---
 export const callGeminiTextAPI = async (formData, isPremium = false, retries = 5) => {
   if (!isPremium) {
     const hasNonPG = formData.questionTypes.some(t => t.id !== 'pg' && t.checked);
@@ -139,7 +141,8 @@ export const callGeminiTextAPI = async (formData, isPremium = false, retries = 5
 
 // --- FUNGSI BARU: GENERATE KISI-KISI SOAL ---
 export const callGeminiKisiKisiAPI = async (formData, isPremium = false, retries = 5) => {
-  const totalSoal = parseInt(formData.totalPG || formData.pgCount || 0) + parseInt(formData.totalUraian || formData.esaiCount || 0);
+  // Hitung ulang total semua jenis soal dari versi form yang sudah di-update
+  const totalSoal = parseInt(formData.pgCount||0) + parseInt(formData.esaiCount||0) + parseInt(formData.bsCount||0) + parseInt(formData.jodohCount||0) + parseInt(formData.ceritaCount||0);
   
   // Validasi Limit Free User
   if (!isPremium && totalSoal > 10) {
@@ -157,8 +160,11 @@ export const callGeminiKisiKisiAPI = async (formData, isPremium = false, retries
   - Mata Pelajaran: ${formData.subject}
   - Kelas / Fase: ${formData.grade}
   - Kurikulum: ${formData.curriculum}
-  - Jumlah Pilihan Ganda (PG): ${formData.totalPG || formData.pgCount}
-  - Jumlah Uraian/Esai: ${formData.totalUraian || formData.esaiCount}
+  - Jumlah Pilihan Ganda (PG): ${formData.pgCount || 0}
+  - Jumlah Uraian/Esai: ${formData.esaiCount || 0}
+  - Jumlah Benar/Salah: ${formData.bsCount || 0}
+  - Jumlah Menjodohkan: ${formData.jodohCount || 0}
+  - Jumlah Soal Cerita: ${formData.ceritaCount || 0}
   
   MATERI SUMBER:
   - Capaian Pembelajaran (CP) / KD: """${formData.cpText}"""
@@ -168,7 +174,7 @@ export const callGeminiKisiKisiAPI = async (formData, isPremium = false, retries
   1. Buat indikator soal yang spesifik, operasional (menggunakan KKO yang tepat), dan logis berdasarkan materi.
   2. Distribusikan level kognitif secara proporsional (gabungan dari L1/C1-C2, L2/C3, L3/C4-C6).
   3. Indikator biasanya berbunyi seperti: "Disajikan sebuah teks/gambar..., siswa dapat menentukan..."
-  4. Total baris kisi-kisi harus TEPAT ${totalSoal} baris (sesuai jumlah PG + Esai).
+  4. Total baris kisi-kisi harus TEPAT ${totalSoal} baris (sesuai total jumlah dari semua tipe soal di atas).
   
   Respons WAJIB dalam format JSON murni TANPA awalan/akhiran markdown atau teks apapun:
   {
@@ -179,7 +185,7 @@ export const callGeminiKisiKisiAPI = async (formData, isPremium = false, retries
         "materi": "Teks Lingkup Materi...",
         "indikator": "Siswa disajikan sebuah gambar, siswa dapat menentukan...",
         "level_kognitif": "L1 (C2)",
-        "bentuk_soal": "PG",
+        "bentuk_soal": "PG / Uraian / Benar Salah / Menjodohkan / Cerita",
         "no_soal": "1"
       }
     ]
@@ -217,7 +223,7 @@ export const callGeminiKisiKisiAPI = async (formData, isPremium = false, retries
       let jsonText = data.choices?.[0]?.message?.content;
       if (!jsonText) throw new Error("Format respons AI kosong atau tidak valid.");
       
-      // Bersihkan markdown
+      // Bersihkan markdown jika ada
       jsonText = jsonText.replace(/```json/g, '').replace(/```/g, '').trim();
       
       const parsedData = JSON.parse(jsonText);
@@ -233,7 +239,7 @@ export const callGeminiKisiKisiAPI = async (formData, isPremium = false, retries
   }
 };
 
-// Menggunakan Mode Frontend (Public Url) agar Gratis tanpa Rate Limit IP Server
+// --- FUNGSI GENERATE GAMBAR (POLLINATIONS AI) ---
 export const callImagenAPI = async (promptText, retries = 4) => {
   const finalPrompt = `cute, colorful cartoon style illustration for elementary school educational material. Highly relevant to the subject context. IF there are any written words or texts in the image, THEY MUST BE WRITTEN IN INDONESIAN. Child safe. Concept: ${promptText}`;
   
