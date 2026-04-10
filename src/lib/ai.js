@@ -2,7 +2,7 @@
 const OPENROUTER_API_KEY = process.env.NEXT_PUBLIC_OPENROUTER_API_KEY;
 
 // Menggunakan Model Gemini 3.1 Flash Lite Preview
-const AI_MODEL = "google/gemini-3.1-flash-lite-preview"; 
+const AI_MODEL = "google/gemma-4-31b-it:fre"; 
 
 export const analyzeBloomWithAI = async (levels, data, isPremium = false, retries = 3) => {
   if (!isPremium) return "Fitur Analisis AI Taksonomi Bloom khusus untuk pengguna Premium.";
