@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation';
 import { 
   ShieldCheck, Users, Settings, Image as ImageIcon, Upload, LogOut, 
   CheckCircle2, AlertCircle, Loader2, Plus, Save, Eye, EyeOff, Trash2, X,
-  Clock, ChevronLeft, FileText, Zap, ShieldAlert
+  Clock, ChevronLeft, FileText, Zap, ShieldAlert, CreditCard
 } from 'lucide-react';
 import { auth, db } from '../../lib/firebase';
 import { onAuthStateChanged, signOut } from 'firebase/auth';
@@ -22,7 +22,9 @@ export default function AdminPage() {
   const [allTransactions, setAllTransactions] = useState([]);
   const [packages, setPackages] = useState([]);
   
-  // State untuk Pemantauan Riwayat (Fitur Baru)
+  // State untuk Rekening Bank (Fitur Baru)
+  const [bankDetails, setBankDetails] = useState({ bankName: '', accountName: '', accountNumber: '' });
+  
   const [selectedUserHistory, setSelectedUserHistory] = useState(null); 
   const [userHistories, setUserHistories] = useState([]);
   const [viewingDetail, setViewingDetail] = useState(null);
@@ -58,18 +60,21 @@ export default function AdminPage() {
       setAllTransactions(snapshot.docs.map(d => ({ id: d.id, ...d.data() })).sort((a,b) => new Date(b.createdAt) - new Date(a.createdAt)));
     });
 
-    // 3. Ambil Data Paket
+    // 3. Ambil Data Paket & Info Bank
     const pkgsRef = doc(db, 'artifacts', appId, 'public', 'data', 'settings', 'packages');
     const unsubPkgs = onSnapshot(pkgsRef, (docSnap) => {
       if (docSnap.exists()) {
-        setPackages(docSnap.data().items || []);
+        const data = docSnap.data();
+        setPackages(data.items || []);
+        if (data.bankDetails) setBankDetails(data.bankDetails);
       } else {
         const defaultPkgs = [
           { id: 'pkg_1', name: 'Paket Basic', coins: 100, generate: 10, price: 20000, color: 'blue', isActive: true, qrCode: '' },
           { id: 'pkg_2', name: 'Paket Basic+', coins: 150, generate: 15, price: 28000, color: 'indigo', isActive: true, qrCode: '' },
           { id: 'pkg_3', name: 'Paket Premium', coins: 200, generate: 20, price: 35000, color: 'purple', isActive: true, qrCode: '' }
         ];
-        setDoc(pkgsRef, { items: defaultPkgs });
+        const defaultBank = { bankName: 'BCA', accountName: 'Admin EduQuest', accountNumber: '1234567890' };
+        setDoc(pkgsRef, { items: defaultPkgs, bankDetails: defaultBank });
       }
     });
 
@@ -88,7 +93,6 @@ export default function AdminPage() {
     return () => unsub();
   }, [selectedUserHistory]);
 
-  // Bersihkan state riwayat jika ganti tab
   useEffect(() => {
     setSelectedUserHistory(null);
     setViewingDetail(null);
@@ -131,7 +135,6 @@ export default function AdminPage() {
   const showError = (msg) => { setErrorMsg(msg); setTimeout(() => setErrorMsg(''), 5000); };
   const showSuccess = (msg) => { setSuccessMsg(msg); setTimeout(() => setSuccessMsg(''), 5000); };
 
-  // --- LOGIKA MANAJEMEN PAKET ---
   const updatePackage = (index, field, value) => {
     const newPkgs = [...packages];
     newPkgs[index][field] = value;
@@ -160,8 +163,9 @@ export default function AdminPage() {
     setIsSavingPackages(true);
     try {
       const pkgsRef = doc(db, 'artifacts', appId, 'public', 'data', 'settings', 'packages');
-      await setDoc(pkgsRef, { items: packages });
-      showSuccess('Semua pengaturan paket & QR berhasil disimpan!');
+      // Menyimpan detail paket DAN detail bank secara bersamaan
+      await setDoc(pkgsRef, { items: packages, bankDetails: bankDetails });
+      showSuccess('Semua pengaturan paket & Rekening Bank berhasil disimpan!');
     } catch (e) {
       showError('Gagal menyimpan paket: ' + e.message);
     } finally {
@@ -207,13 +211,18 @@ export default function AdminPage() {
             <div className="p-4 bg-slate-50 border-b font-bold text-slate-700">Riwayat & Permintaan Pembayaran</div>
             <div className="overflow-x-auto">
               <table className="w-full text-left text-sm">
-                <thead className="bg-slate-100 text-slate-600"><tr><th className="p-4">User</th><th className="p-4">Paket</th><th className="p-4">Waktu</th><th className="p-4 text-center">Bukti</th><th className="p-4 text-right">Aksi</th></tr></thead>
+                <thead className="bg-slate-100 text-slate-600"><tr><th className="p-4">User</th><th className="p-4">Paket & Metode</th><th className="p-4">Waktu</th><th className="p-4 text-center">Bukti</th><th className="p-4 text-right">Aksi</th></tr></thead>
                 <tbody>
                   {allTransactions.length === 0 && <tr><td colSpan="5" className="p-8 text-center text-slate-500">Belum ada transaksi.</td></tr>}
                   {allTransactions.map((tx) => (
                     <tr key={tx.id} className="border-b hover:bg-slate-50">
                       <td className="p-4"><div className="font-medium">{tx.userName}</div><div className="text-xs text-slate-500">{tx.userEmail}</div></td>
-                      <td className="p-4 font-bold text-indigo-700">{tx.packageName}</td>
+                      <td className="p-4">
+                        <div className="font-bold text-indigo-700">{tx.packageName}</div>
+                        <div className="text-xs font-medium text-slate-500 mt-1 flex items-center">
+                          {tx.paymentMethod === 'Transfer_Bank' ? <><CreditCard className="w-3 h-3 mr-1" /> Transfer Bank</> : <><Zap className="w-3 h-3 mr-1" /> QRIS</>}
+                        </div>
+                      </td>
                       <td className="p-4 text-xs text-slate-500">{new Date(tx.createdAt).toLocaleString('id-ID')}</td>
                       <td className="p-4 text-center"><button onClick={() => setPreviewImage(tx.proofImage)} className="text-blue-600 hover:underline flex flex-col items-center mx-auto"><ImageIcon className="w-5 h-5 mb-1" /> Lihat</button></td>
                       <td className="p-4 text-right">
@@ -249,24 +258,16 @@ export default function AdminPage() {
                     </button>
                   </div>
 
-                  {/* PANEL AUDIT KONTEKS (MATERI, PARAMETER, SNAPSHOT STATUS) */}
                   <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                    {/* Panel Kiri: Materi Sumber */}
                     <div className="col-span-1 md:col-span-2 bg-white p-6 rounded-2xl border border-slate-200 shadow-sm flex flex-col">
-                      <h3 className="font-bold text-slate-800 flex items-center mb-3">
-                        <FileText className="w-5 h-5 mr-2 text-indigo-500"/> Materi Sumber (Input Pengguna)
-                      </h3>
+                      <h3 className="font-bold text-slate-800 flex items-center mb-3"><FileText className="w-5 h-5 mr-2 text-indigo-500"/> Materi Sumber</h3>
                       <div className="bg-slate-50 p-4 rounded-xl border border-slate-100 text-sm text-slate-600 flex-grow max-h-[250px] overflow-y-auto" style={{ whiteSpace: 'pre-wrap' }}>
                         {viewingDetail.formData?.rppText ? viewingDetail.formData.rppText : <span className="italic text-slate-400">Tidak ada materi sumber yang dicatat.</span>}
                       </div>
                     </div>
 
-                    {/* Panel Kanan: Parameter Generate & Snapshot Akun */}
                     <div className="col-span-1 bg-white p-6 rounded-2xl border border-slate-200 shadow-sm">
-                      <h3 className="font-bold text-slate-800 flex items-center mb-4">
-                        <Settings className="w-5 h-5 mr-2 text-slate-500"/> Parameter Generate
-                      </h3>
-                      
+                      <h3 className="font-bold text-slate-800 flex items-center mb-4"><Settings className="w-5 h-5 mr-2 text-slate-500"/> Parameter Generate</h3>
                       <div className="space-y-4">
                         <div>
                           <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider block mb-1.5">Target Taksonomi Bloom</span>
@@ -358,8 +359,7 @@ export default function AdminPage() {
                 <div className="bg-white border rounded-xl shadow-sm overflow-hidden">
                   <div className="p-4 bg-slate-50 border-b font-bold text-slate-700 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                     <div className="flex items-center text-indigo-700">
-                      <Clock className="w-5 h-5 mr-2" /> 
-                      Riwayat Log Aktivitas: <span className="text-slate-800 ml-1">{selectedUserHistory.name}</span>
+                      <Clock className="w-5 h-5 mr-2" /> Riwayat Log Aktivitas: <span className="text-slate-800 ml-1">{selectedUserHistory.name}</span>
                     </div>
                     <button onClick={() => setSelectedUserHistory(null)} className="text-sm bg-white border border-slate-300 px-4 py-2 rounded-lg hover:bg-slate-100 flex items-center font-medium shadow-sm transition-colors">
                       <ChevronLeft className="w-4 h-4 mr-1"/> Kembali ke Daftar User
@@ -367,10 +367,7 @@ export default function AdminPage() {
                   </div>
                   <div className="overflow-x-auto">
                     {userHistories.length === 0 ? (
-                      <div className="p-12 text-center text-slate-500">
-                        <FileText className="w-12 h-12 mx-auto mb-3 text-slate-300" />
-                        <p>Pengguna ini belum pernah meng-generate soal.</p>
-                      </div>
+                      <div className="p-12 text-center text-slate-500"><FileText className="w-12 h-12 mx-auto mb-3 text-slate-300" /><p>Pengguna ini belum pernah meng-generate soal.</p></div>
                     ) : (
                       <table className="w-full text-left text-sm">
                         <thead className="bg-slate-100 text-slate-600"><tr><th className="p-4">Waktu Generate</th><th className="p-4">Mata Pelajaran</th><th className="p-4">Jenis Ujian</th><th className="p-4 text-center">Status Akun</th><th className="p-4 text-right">Detail Log</th></tr></thead>
@@ -383,16 +380,8 @@ export default function AdminPage() {
                               </td>
                               <td className="p-4 font-medium text-slate-800">{hist.subject} <span className="text-slate-500 font-normal">(Kelas {hist.grade})</span></td>
                               <td className="p-4 text-slate-600">{hist.examType}</td>
-                              <td className="p-4 text-center">
-                                {hist.isPremiumSnapshot 
-                                  ? <span className="bg-amber-100 text-amber-700 px-2 py-1 rounded text-xs font-bold">Pro</span>
-                                  : <span className="bg-slate-100 text-slate-600 px-2 py-1 rounded text-xs font-medium">Free</span>}
-                              </td>
-                              <td className="p-4 text-right">
-                                <button onClick={() => setViewingDetail(hist)} className="bg-indigo-50 text-indigo-600 hover:bg-indigo-100 border border-indigo-200 px-3 py-1.5 rounded-lg font-bold flex items-center justify-center ml-auto transition-colors">
-                                  <Eye className="w-4 h-4 mr-1" /> Periksa
-                                </button>
-                              </td>
+                              <td className="p-4 text-center">{hist.isPremiumSnapshot ? <span className="bg-amber-100 text-amber-700 px-2 py-1 rounded text-xs font-bold">Pro</span> : <span className="bg-slate-100 text-slate-600 px-2 py-1 rounded text-xs font-medium">Free</span>}</td>
+                              <td className="p-4 text-right"><button onClick={() => setViewingDetail(hist)} className="bg-indigo-50 text-indigo-600 hover:bg-indigo-100 border border-indigo-200 px-3 py-1.5 rounded-lg font-bold flex items-center justify-center ml-auto transition-colors"><Eye className="w-4 h-4 mr-1" /> Periksa</button></td>
                             </tr>
                           ))}
                         </tbody>
@@ -417,11 +406,7 @@ export default function AdminPage() {
                           <td className="p-4 font-medium text-slate-800">{u.name} {u.isPremium && <span className="ml-2 bg-gradient-to-r from-amber-400 to-orange-500 text-white text-[10px] font-bold px-1.5 py-0.5 rounded uppercase">Pro</span>}</td>
                           <td className="p-4 text-slate-500">{u.email}</td>
                           <td className="p-4 text-center font-bold text-amber-600 text-lg">{u.coins}</td>
-                          <td className="p-4 text-right">
-                            <button onClick={() => setSelectedUserHistory(u)} className="bg-slate-800 text-white hover:bg-slate-700 px-3 py-1.5 rounded-lg font-bold flex items-center justify-center ml-auto shadow-sm transition-all">
-                              <Clock className="w-4 h-4 mr-1.5" /> Pantau Aktivitas
-                            </button>
-                          </td>
+                          <td className="p-4 text-right"><button onClick={() => setSelectedUserHistory(u)} className="bg-slate-800 text-white hover:bg-slate-700 px-3 py-1.5 rounded-lg font-bold flex items-center justify-center ml-auto shadow-sm transition-all"><Clock className="w-4 h-4 mr-1.5" /> Pantau Aktivitas</button></td>
                         </tr>
                       ))}
                     </tbody>
@@ -432,13 +417,13 @@ export default function AdminPage() {
           </div>
         )}
 
-        {/* TAB: PENGATURAN PAKET & QR CODE */}
+        {/* TAB: PENGATURAN PAKET, BANK & QR CODE */}
         {adminTab === 'settings' && (
           <div className="space-y-6 animate-in fade-in">
             <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center bg-white p-5 rounded-xl border shadow-sm gap-4">
               <div>
-                <h3 className="font-bold text-lg text-slate-800">Manajemen Paket & QR Code</h3>
-                <p className="text-xs text-slate-500">Buat paket baru, ubah harga, atau upload QR spesifik untuk setiap paket.</p>
+                <h3 className="font-bold text-lg text-slate-800">Manajemen Paket & Rekening</h3>
+                <p className="text-xs text-slate-500">Atur info rekening Bank pusat, dan buat paket pembayaran spesifik.</p>
               </div>
               <div className="flex space-x-3 w-full sm:w-auto">
                 <button onClick={addNewPackage} className="flex-1 sm:flex-none bg-slate-100 hover:bg-slate-200 text-slate-700 px-4 py-2.5 rounded-lg text-sm font-medium transition-colors flex items-center justify-center">
@@ -448,6 +433,25 @@ export default function AdminPage() {
                   {isSavingPackages ? <Loader2 className="w-4 h-4 mr-2 animate-spin"/> : <Save className="w-4 h-4 mr-2"/>}
                   Simpan Semua
                 </button>
+              </div>
+            </div>
+
+            {/* --- PANEL PENGATURAN REKENING BANK --- */}
+            <div className="bg-white p-6 rounded-2xl border shadow-sm mb-8">
+              <h3 className="font-bold text-lg text-slate-800 mb-4 flex items-center"><CreditCard className="w-5 h-5 mr-2 text-indigo-600" /> Pengaturan Rekening Bank (Transfer Manual)</h3>
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div>
+                  <label className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-1 block">Nama Bank</label>
+                  <input type="text" value={bankDetails.bankName} onChange={e => setBankDetails({...bankDetails, bankName: e.target.value})} placeholder="Cth: BCA / Mandiri / BRI" className="w-full border border-slate-300 focus:border-indigo-500 rounded-lg px-3 py-2.5 outline-none text-sm font-medium" />
+                </div>
+                <div>
+                  <label className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-1 block">Nomor Rekening</label>
+                  <input type="text" value={bankDetails.accountNumber} onChange={e => setBankDetails({...bankDetails, accountNumber: e.target.value})} placeholder="Cth: 1234567890" className="w-full border border-slate-300 focus:border-indigo-500 rounded-lg px-3 py-2.5 outline-none text-sm font-medium" />
+                </div>
+                <div>
+                  <label className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-1 block">Atas Nama</label>
+                  <input type="text" value={bankDetails.accountName} onChange={e => setBankDetails({...bankDetails, accountName: e.target.value})} placeholder="Cth: John Doe" className="w-full border border-slate-300 focus:border-indigo-500 rounded-lg px-3 py-2.5 outline-none text-sm font-medium" />
+                </div>
               </div>
             </div>
 
