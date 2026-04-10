@@ -1,8 +1,27 @@
-// Mengambil API Key dari brankas rahasia Vercel (Sangat Aman)
+import { db } from './firebase';
+import { doc, getDoc } from 'firebase/firestore';
+
+// Mengambil API Key dari brankas rahasia Vercel
 const OPENROUTER_API_KEY = process.env.NEXT_PUBLIC_OPENROUTER_API_KEY;
 
 // Menggunakan Model Gemini 3.1 Flash Lite Preview
-const AI_MODEL = "google/gemma-4-31b-it:fre"; 
+const AI_MODEL = "google/gemini-3.1-flash-lite-preview"; 
+const appId = 'eduquest-pro';
+
+// --- FUNGSI MENGAMBIL INSTRUKSI AI DARI DATABASE ---
+const fetchAiRoleFromDB = async () => {
+  try {
+    const aiRef = doc(db, 'artifacts', appId, 'public', 'data', 'settings', 'ai_role');
+    const snap = await getDoc(aiRef);
+    if (snap.exists() && snap.data().instruction) {
+      return snap.data().instruction;
+    }
+  } catch (error) {
+    console.error("Gagal menarik Role AI:", error);
+  }
+  // Default fallback jika belum di-set admin
+  return "Anda adalah asisten pembuat soal ujian untuk Guru SD di Indonesia. Pastikan bahasa mudah dipahami oleh anak Sekolah Dasar.";
+};
 
 export const analyzeBloomWithAI = async (levels, data, isPremium = false, retries = 3) => {
   if (!isPremium) return "Fitur Analisis AI Taksonomi Bloom khusus untuk pengguna Premium.";
@@ -13,13 +32,17 @@ export const analyzeBloomWithAI = async (levels, data, isPremium = false, retrie
   const url = `https://openrouter.ai/api/v1/chat/completions`;
   
   for (let i = 0; i < retries; i++) {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 30000); // 30 Detik Timeout
+
     try {
       const response = await fetch(url, {
         method: 'POST',
+        signal: controller.signal, // Mencegah Hang
         headers: { 
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${OPENROUTER_API_KEY}`,
-          'HTTP-Referer': 'https://eduquest-pro-ka55.vercel.app', 
+          'HTTP-Referer': 'https://eduquest-pro.vercel.app', 
           'X-Title': 'EduQuest Pro'
         },
         body: JSON.stringify({ 
@@ -29,12 +52,14 @@ export const analyzeBloomWithAI = async (levels, data, isPremium = false, retrie
           max_tokens: 1000 
         })
       });
+      clearTimeout(timeoutId);
       
       const apiData = await response.json();
       if (!response.ok) throw new Error(apiData.error?.message || 'Gagal menganalisis');
       
       return apiData.choices?.[0]?.message?.content || 'Analisis selesai.';
     } catch (e) {
+      clearTimeout(timeoutId);
       if (i === retries - 1) throw e;
       await new Promise(r => setTimeout(r, 1000 * Math.pow(2, i))); 
     }
@@ -42,7 +67,6 @@ export const analyzeBloomWithAI = async (levels, data, isPremium = false, retrie
 };
 
 export const callGeminiTextAPI = async (formData, isPremium = false, retries = 5) => {
-  // --- VALIDASI BACKEND: Keamanan User Free ---
   if (!isPremium) {
     const hasNonPG = formData.questionTypes.some(t => t.id !== 'pg' && t.checked);
     if (hasNonPG) throw new Error("Akses Ditolak: Versi Free hanya dapat membuat soal Pilihan Ganda.");
@@ -51,33 +75,49 @@ export const callGeminiTextAPI = async (formData, isPremium = false, retries = 5
   const activeTypes = formData.questionTypes.filter(t => t.checked && t.count > 0);
   const typesInstruction = activeTypes.map(t => `- ${t.label}: ${t.count} soal`).join('\n');
   const totalSoal = activeTypes.reduce((sum, t) => sum + t.count, 0);
-  
   const activeBlooms = isPremium ? formData.bloomLevels.filter(b => b.checked).map(b => b.label).join(', ') : 'Tidak ada batasan Bloom';
-  const bloomInstruction = isPremium ? `Fokus HANYA pada Taksonomi Bloom: ${activeBlooms}.` : 'Buat soal dasar (umum) tanpa spesifikasi Taksonomi Bloom yang rumit.';
   
   const imageInstruction = isPremium ? `"imagePrompt": "Deskripsi gambar gaya KARTUN ANAK-ANAK. WAJIB BAHASA INDONESIA jika ada teks. Tulis 'none' jika tak butuh."` : `"imagePrompt": "none"`;
 
-  const prompt = `Anda asisten pembuat soal ujian Guru SD di Indonesia. Buat total ${totalSoal} soal ujian untuk kelas ${formData.grade} SD, mapel ${formData.subject}. Ujian: ${formData.examType}. ${bloomInstruction} Komposisi: \n${typesInstruction}\nMateri: """${formData.rppText.substring(0, 3000)}"""\nRespons HANYA format JSON murni tanpa awalan/akhiran markdown:\n{ "questions": [ { "id": "q1", "type": "Pilihan Ganda", "text": "Teks soal...", "options": ["A. Opsi 1"], "answer": "Jawaban", "bloomLevel": "Pilih satu Bloom", ${imageInstruction} } ] }`;
+  const systemRole = await fetchAiRoleFromDB();
+
+  const prompt = `${systemRole}
+  
+  TUGAS SAAT INI:
+  Buat total ${totalSoal} soal ujian untuk kelas ${formData.grade} SD, mapel ${formData.subject}. Ujian: ${formData.examType}. 
+  Fokus HANYA pada Taksonomi Bloom: ${activeBlooms}. 
+  Komposisi SOAL WAJIB: \n${typesInstruction}
+  
+  Materi Sumber: """${formData.rppText.substring(0, 3000)}"""
+  
+  Respons HANYA format JSON murni tanpa awalan/akhiran markdown:
+  { "questions": [ { "id": "q1", "type": "Pilihan Ganda", "text": "Teks soal...", "options": ["A. Opsi 1"], "answer": "Jawaban", "bloomLevel": "Pilih satu Bloom", ${imageInstruction} } ] }`;
 
   const url = `https://openrouter.ai/api/v1/chat/completions`;
   
   for (let i = 0; i < retries; i++) {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 60000); // 60 Detik Timeout
+
     try {
       const response = await fetch(url, {
         method: 'POST',
+        signal: controller.signal, // Mencegah Hang
         headers: { 
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${OPENROUTER_API_KEY}`,
-          'HTTP-Referer': 'https://eduquest-pro-ka55.vercel.app',
+          'HTTP-Referer': 'https://eduquest-pro.vercel.app',
           'X-Title': 'EduQuest Pro'
         },
         body: JSON.stringify({ 
           model: AI_MODEL,
           messages: [{ role: "user", content: prompt }],
           reasoning: { enabled: true },
+          response_format: { type: "json_object" }, // Memaksa output JSON murni
           max_tokens: 4000 
         })
       });
+      clearTimeout(timeoutId);
       const data = await response.json();
       
       if (!response.ok) throw new Error(data.error?.message || `HTTP Error ${response.status}`);
@@ -90,17 +130,117 @@ export const callGeminiTextAPI = async (formData, isPremium = false, retries = 5
       const parsedData = JSON.parse(jsonText);
       return (parsedData.questions || []).map(q => ({ ...q, text: q.text.replace(/^\d+[\.\)]\s*/, '') }));
     } catch (e) {
-      if (i === retries - 1) throw e;
+      clearTimeout(timeoutId);
+      if (i === retries - 1) throw new Error(e.name === 'AbortError' ? "Waktu tunggu respons AI habis. Coba lagi." : e.message);
       await new Promise(r => setTimeout(r, 1500 * Math.pow(2, i)));
     }
   }
 };
 
-// Mengubah parameter callImagenAPI dengan auto-retry 4 kali
+// --- FUNGSI BARU: GENERATE KISI-KISI SOAL ---
+export const callGeminiKisiKisiAPI = async (formData, isPremium = false, retries = 5) => {
+  const totalSoal = parseInt(formData.totalPG || formData.pgCount || 0) + parseInt(formData.totalUraian || formData.esaiCount || 0);
+  
+  // Validasi Limit Free User
+  if (!isPremium && totalSoal > 10) {
+    throw new Error("Akses Ditolak: Versi Free maksimal menghasilkan 10 soal kisi-kisi. Silakan Upgrade Pro.");
+  }
+
+  const systemRole = await fetchAiRoleFromDB();
+
+  const prompt = `${systemRole}
+  
+  TUGAS SAAT INI:
+  Bertindaklah sebagai ahli pembuat kurikulum Sekolah Dasar (SD) di Indonesia. Buatlah Kisi-Kisi Penyusunan Soal Ujian yang komprehensif, logis, dan terstruktur.
+  
+  PARAMETER KISI-KISI:
+  - Mata Pelajaran: ${formData.subject}
+  - Kelas / Fase: ${formData.grade}
+  - Kurikulum: ${formData.curriculum}
+  - Jumlah Pilihan Ganda (PG): ${formData.totalPG || formData.pgCount}
+  - Jumlah Uraian/Esai: ${formData.totalUraian || formData.esaiCount}
+  
+  MATERI SUMBER:
+  - Capaian Pembelajaran (CP) / KD: """${formData.cpText}"""
+  - Lingkup Materi Pokok: """${formData.materiText}"""
+
+  INSTRUKSI PENYUSUNAN:
+  1. Buat indikator soal yang spesifik, operasional (menggunakan KKO yang tepat), dan logis berdasarkan materi.
+  2. Distribusikan level kognitif secara proporsional (gabungan dari L1/C1-C2, L2/C3, L3/C4-C6).
+  3. Indikator biasanya berbunyi seperti: "Disajikan sebuah teks/gambar..., siswa dapat menentukan..."
+  4. Total baris kisi-kisi harus TEPAT ${totalSoal} baris (sesuai jumlah PG + Esai).
+  
+  Respons WAJIB dalam format JSON murni TANPA awalan/akhiran markdown atau teks apapun:
+  {
+    "kisi_kisi": [
+      {
+        "no": 1,
+        "cp": "Teks Capaian Pembelajaran...",
+        "materi": "Teks Lingkup Materi...",
+        "indikator": "Siswa disajikan sebuah gambar, siswa dapat menentukan...",
+        "level_kognitif": "L1 (C2)",
+        "bentuk_soal": "PG",
+        "no_soal": "1"
+      }
+    ]
+  }`;
+
+  const url = `https://openrouter.ai/api/v1/chat/completions`;
+  
+  for (let i = 0; i < retries; i++) {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 60000); // 60 Detik Timeout
+
+    try {
+      const response = await fetch(url, {
+        method: 'POST',
+        signal: controller.signal, // Mencegah Hang
+        headers: { 
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${OPENROUTER_API_KEY}`,
+          'HTTP-Referer': 'https://eduquest-pro.vercel.app',
+          'X-Title': 'EduQuest Pro'
+        },
+        body: JSON.stringify({ 
+          model: AI_MODEL,
+          messages: [{ role: "user", content: prompt }],
+          reasoning: { enabled: true },
+          response_format: { type: "json_object" }, // Memaksa output JSON murni
+          max_tokens: 6000 // Kisi-kisi butuh token lebih besar
+        })
+      });
+      clearTimeout(timeoutId);
+      const data = await response.json();
+      
+      if (!response.ok) throw new Error(data.error?.message || `HTTP Error ${response.status}`);
+      
+      let jsonText = data.choices?.[0]?.message?.content;
+      if (!jsonText) throw new Error("Format respons AI kosong atau tidak valid.");
+      
+      // Bersihkan markdown
+      jsonText = jsonText.replace(/```json/g, '').replace(/```/g, '').trim();
+      
+      const parsedData = JSON.parse(jsonText);
+      if (!parsedData.kisi_kisi || !Array.isArray(parsedData.kisi_kisi)) {
+        throw new Error("AI gagal mengembalikan format tabel kisi-kisi yang benar.");
+      }
+      return parsedData.kisi_kisi;
+    } catch (e) {
+      clearTimeout(timeoutId);
+      if (i === retries - 1) throw new Error(e.name === 'AbortError' ? "Waktu tunggu respons AI habis. Coba lagi." : e.message);
+      await new Promise(r => setTimeout(r, 1500 * Math.pow(2, i)));
+    }
+  }
+};
+
+// Menggunakan Mode Frontend (Public Url) agar Gratis tanpa Rate Limit IP Server
 export const callImagenAPI = async (promptText, retries = 4) => {
   const finalPrompt = `cute, colorful cartoon style illustration for elementary school educational material. Highly relevant to the subject context. IF there are any written words or texts in the image, THEY MUST BE WRITTEN IN INDONESIAN. Child safe. Concept: ${promptText}`;
   
   for (let i = 0; i < retries; i++) {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 20000); // 20 Detik Timeout per gambar
+
     try {
       // 1. Tambahkan "seed" (angka acak) agar request dianggap baru dan tidak kena blokir cache CDN
       const randomSeed = Math.floor(Math.random() * 1000000);
@@ -113,7 +253,11 @@ export const callImagenAPI = async (promptText, retries = 4) => {
       }
 
       // 3. Matikan policy referrer agar tidak ditolak oleh jaringan
-      const response = await fetch(imageUrl, { referrerPolicy: "no-referrer" });
+      const response = await fetch(imageUrl, { 
+        referrerPolicy: "no-referrer",
+        signal: controller.signal // Mencegah Hang
+      });
+      clearTimeout(timeoutId);
       
       if (!response.ok) throw new Error(`HTTP Error ${response.status}`);
       
@@ -127,6 +271,7 @@ export const callImagenAPI = async (promptText, retries = 4) => {
       });
       
     } catch (error) {
+      clearTimeout(timeoutId);
       // 4. Tangkap error (seperti ERR_CONNECTION_RESET), lalu ulang loop
       if (i === retries - 1) {
         console.error("Gagal total mengonversi gambar setelah beberapa percobaan:", error);
