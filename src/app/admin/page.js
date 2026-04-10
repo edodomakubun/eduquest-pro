@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation';
 import { 
   ShieldCheck, Users, Settings, Image as ImageIcon, Upload, LogOut, 
   CheckCircle2, AlertCircle, Loader2, Plus, Save, Eye, EyeOff, Trash2, X,
-  Clock, ChevronLeft, FileText, Zap, ShieldAlert, CreditCard, Globe
+  Clock, ChevronLeft, FileText, Zap, ShieldAlert, CreditCard, Globe, Database, Bot
 } from 'lucide-react';
 import { auth, db } from '../../lib/firebase';
 import { onAuthStateChanged, signOut } from 'firebase/auth';
@@ -23,14 +23,25 @@ export default function AdminPage() {
   const [packages, setPackages] = useState([]);
   const [bankDetails, setBankDetails] = useState({ bankName: '', accountName: '', accountNumber: '' });
   
-  // State untuk Whitelist Domain (Fitur Baru)
+  // State untuk Whitelist Domain
   const [allowedDomains, setAllowedDomains] = useState([]);
   const [newDomain, setNewDomain] = useState('');
 
+  // --- STATE MASTER DATA & AI (FITUR BARU) ---
+  const [aiRole, setAiRole] = useState('');
+  const [isSavingAi, setIsSavingAi] = useState(false);
+  const [subjects, setSubjects] = useState([]);
+  const [newSubject, setNewSubject] = useState('');
+  const [bloomLevels, setBloomLevels] = useState([]);
+  const [newBloomId, setNewBloomId] = useState('');
+  const [newBloomLabel, setNewBloomLabel] = useState('');
+
+  // State Riwayat
   const [selectedUserHistory, setSelectedUserHistory] = useState(null); 
   const [userHistories, setUserHistories] = useState([]);
   const [viewingDetail, setViewingDetail] = useState(null);
   
+  // State UI
   const [previewImage, setPreviewImage] = useState(null); 
   const [errorMsg, setErrorMsg] = useState('');
   const [successMsg, setSuccessMsg] = useState('');
@@ -50,16 +61,19 @@ export default function AdminPage() {
   useEffect(() => {
     if (!isAdmin) return;
     
+    // 1. Ambil Data User
     const usersColRef = collection(db, 'artifacts', appId, 'public', 'data', 'profiles');
     const unsubUsers = onSnapshot(usersColRef, (snapshot) => {
       setAllUsers(snapshot.docs.map(d => ({ id: d.id, ...d.data() })));
     });
 
+    // 2. Ambil Data Transaksi
     const txColRef = collection(db, 'artifacts', appId, 'public', 'data', 'transactions');
     const unsubAllTx = onSnapshot(txColRef, (snapshot) => {
       setAllTransactions(snapshot.docs.map(d => ({ id: d.id, ...d.data() })).sort((a,b) => new Date(b.createdAt) - new Date(a.createdAt)));
     });
 
+    // 3. Ambil Data Paket & Bank (Dengan fallback default jika kosong)
     const pkgsRef = doc(db, 'artifacts', appId, 'public', 'data', 'settings', 'packages');
     const unsubPkgs = onSnapshot(pkgsRef, (docSnap) => {
       if (docSnap.exists()) {
@@ -88,7 +102,24 @@ export default function AdminPage() {
       }
     });
 
-    return () => { unsubUsers(); unsubAllTx(); unsubPkgs(); unsubDomains(); };
+    // 5. Ambil Master Data Mapel & Bloom
+    const masterRef = doc(db, 'artifacts', appId, 'public', 'data', 'settings', 'master_data');
+    const unsubMaster = onSnapshot(masterRef, (docSnap) => {
+      if (docSnap.exists()) {
+        setSubjects(docSnap.data().subjects || []);
+        setBloomLevels(docSnap.data().bloomLevels || []);
+      }
+    });
+
+    // 6. Ambil Role AI
+    const aiRef = doc(db, 'artifacts', appId, 'public', 'data', 'settings', 'ai_role');
+    const unsubAi = onSnapshot(aiRef, (docSnap) => {
+      if (docSnap.exists()) {
+        setAiRole(docSnap.data().instruction || '');
+      }
+    });
+
+    return () => { unsubUsers(); unsubAllTx(); unsubPkgs(); unsubDomains(); unsubMaster(); unsubAi(); };
   }, [isAdmin]);
 
   // --- LOGIKA MENGAMBIL RIWAYAT SATU USER ---
@@ -135,6 +166,44 @@ export default function AdminPage() {
       await updateDoc(txRef, { status: 'approved', approvedAt: new Date().toISOString() });
       showSuccess(`Berhasil menyetujui ${tx.packageName} untuk ${tx.userName}`);
     } catch (error) { showError('Gagal menyetujui: ' + error.message); }
+  };
+
+  // --- LOGIKA MASTER DATA & AI ---
+  const saveMasterData = async (newSubjects, newBlooms) => {
+    try {
+      const masterRef = doc(db, 'artifacts', appId, 'public', 'data', 'settings', 'master_data');
+      await setDoc(masterRef, { subjects: newSubjects, bloomLevels: newBlooms }, { merge: true });
+      showSuccess('Master Data berhasil diperbarui!');
+    } catch (e) { showError(e.message); }
+  };
+
+  const handleAddSubject = () => {
+    if (!newSubject.trim()) return;
+    const updated = [...subjects, newSubject.trim()];
+    setSubjects(updated); setNewSubject(''); saveMasterData(updated, bloomLevels);
+  };
+  const handleRemoveSubject = (sub) => {
+    const updated = subjects.filter(s => s !== sub);
+    setSubjects(updated); saveMasterData(updated, bloomLevels);
+  };
+
+  const handleAddBloom = () => {
+    if (!newBloomId.trim() || !newBloomLabel.trim()) return;
+    const updated = [...bloomLevels, { id: newBloomId.trim().toLowerCase(), label: newBloomLabel.trim() }];
+    setBloomLevels(updated); setNewBloomId(''); setNewBloomLabel(''); saveMasterData(subjects, updated);
+  };
+  const handleRemoveBloom = (id) => {
+    const updated = bloomLevels.filter(b => b.id !== id);
+    setBloomLevels(updated); saveMasterData(subjects, updated);
+  };
+
+  const handleSaveAiRole = async () => {
+    setIsSavingAi(true);
+    try {
+      const aiRef = doc(db, 'artifacts', appId, 'public', 'data', 'settings', 'ai_role');
+      await setDoc(aiRef, { instruction: aiRole });
+      showSuccess('Role & Prompt AI berhasil diperbarui!');
+    } catch (e) { showError(e.message); } finally { setIsSavingAi(false); }
   };
 
   // --- LOGIKA MANAJEMEN WHITELIST DOMAIN ---
@@ -233,6 +302,7 @@ export default function AdminPage() {
           {[
             { id: 'transactions', label: 'Verifikasi Pembayaran', icon: ShieldCheck }, 
             { id: 'users', label: 'Data User & Pemantauan', icon: Users }, 
+            { id: 'master', label: 'Master Data & AI', icon: Database }, // <-- FITUR BARU DIGABUNG DI SINI
             { id: 'domains', label: 'Whitelist Domain', icon: Globe },
             { id: 'settings', label: 'Pengaturan Paket', icon: Settings }
           ].map(tab => (
@@ -245,7 +315,7 @@ export default function AdminPage() {
           ))}
         </div>
 
-        {/* TAB: VERIFIKASI TRANSAKSI */}
+        {/* TAB 1: VERIFIKASI TRANSAKSI */}
         {adminTab === 'transactions' && (
           <div className="bg-white border rounded-xl shadow-sm overflow-hidden animate-in fade-in">
             <div className="p-4 bg-slate-50 border-b font-bold text-slate-700">Riwayat & Permintaan Pembayaran</div>
@@ -278,7 +348,74 @@ export default function AdminPage() {
           </div>
         )}
 
-        {/* TAB: DATA USER & PEMANTAUAN RIWAYAT */}
+        {/* TAB BARU: MASTER DATA & AI */}
+        {adminTab === 'master' && (
+          <div className="space-y-6 animate-in fade-in">
+            <div className="bg-white border border-slate-200 rounded-2xl shadow-sm p-6 relative overflow-hidden">
+              <h3 className="font-bold text-lg text-slate-800 flex items-center mb-2"><Bot className="w-5 h-5 mr-2 text-indigo-600"/> Instruksi Dasar AI (System Prompt)</h3>
+              <p className="text-sm text-slate-500 mb-4">Gunakan <b>[MATERI]</b>, <b>[JUMLAH]</b>, <b>[JENIS_SOAL]</b>, dan <b>[TAKSONOMI]</b> dalam teks di bawah agar AI tahu di mana data dari pengguna harus dimasukkan.</p>
+              <textarea 
+                value={aiRole} 
+                onChange={(e) => setAiRole(e.target.value)} 
+                className="w-full min-h-[150px] p-4 border border-slate-300 rounded-xl outline-none focus:ring-2 focus:ring-indigo-500 text-sm font-mono text-slate-700 bg-slate-50"
+                placeholder="Contoh: Anda adalah ahli pembuat soal. Buatlah [JUMLAH] soal [JENIS_SOAL] berdasarkan materi: [MATERI]."
+              ></textarea>
+              <div className="mt-4 flex justify-end">
+                <button onClick={handleSaveAiRole} disabled={isSavingAi} className="bg-indigo-600 hover:bg-indigo-700 disabled:bg-indigo-400 text-white font-bold py-2.5 px-6 rounded-xl flex items-center shadow-sm">
+                  {isSavingAi ? <Loader2 className="w-4 h-4 mr-2 animate-spin"/> : <Save className="w-4 h-4 mr-2"/>} Simpan Instruksi AI
+                </button>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+              <div className="bg-white border border-slate-200 rounded-2xl shadow-sm p-6 flex flex-col">
+                <h3 className="font-bold text-lg text-slate-800 flex items-center mb-4"><FileText className="w-5 h-5 mr-2 text-blue-600"/> Master Mata Pelajaran</h3>
+                <div className="flex gap-2 mb-6">
+                  <input type="text" value={newSubject} onChange={e => setNewSubject(e.target.value)} placeholder="Mata Pelajaran Baru" className="flex-1 border border-slate-300 rounded-lg px-3 py-2 outline-none focus:border-blue-500 text-sm font-medium" />
+                  <button onClick={handleAddSubject} className="bg-blue-600 text-white px-4 rounded-lg font-bold"><Plus className="w-5 h-5"/></button>
+                </div>
+                <div className="bg-slate-50 rounded-xl border border-slate-200 overflow-hidden flex-grow max-h-[300px] overflow-y-auto">
+                  <table className="w-full text-sm text-left">
+                    <tbody>
+                      {subjects.length === 0 && <tr><td className="p-4 text-center text-slate-500">Belum ada mata pelajaran.</td></tr>}
+                      {subjects.map((sub, i) => (
+                        <tr key={i} className="border-b hover:bg-white">
+                          <td className="p-3 font-medium text-slate-700">{sub}</td>
+                          <td className="p-3 text-right"><button onClick={() => handleRemoveSubject(sub)} className="text-red-400 hover:text-red-600 p-1"><Trash2 className="w-4 h-4"/></button></td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+
+              <div className="bg-white border border-slate-200 rounded-2xl shadow-sm p-6 flex flex-col">
+                <h3 className="font-bold text-lg text-slate-800 flex items-center mb-4"><Zap className="w-5 h-5 mr-2 text-amber-500"/> Master Taksonomi Bloom</h3>
+                <div className="flex gap-2 mb-6">
+                  <input type="text" value={newBloomId} onChange={e => setNewBloomId(e.target.value)} placeholder="ID (cth: c7)" className="w-24 border border-slate-300 rounded-lg px-3 py-2 outline-none focus:border-amber-500 text-sm font-medium lowercase" />
+                  <input type="text" value={newBloomLabel} onChange={e => setNewBloomLabel(e.target.value)} placeholder="Label" className="flex-1 border border-slate-300 rounded-lg px-3 py-2 outline-none text-sm font-medium" />
+                  <button onClick={handleAddBloom} className="bg-amber-500 text-white px-4 rounded-lg font-bold"><Plus className="w-5 h-5"/></button>
+                </div>
+                <div className="bg-slate-50 rounded-xl border border-slate-200 overflow-hidden flex-grow max-h-[300px] overflow-y-auto">
+                  <table className="w-full text-sm text-left">
+                    <tbody>
+                      {bloomLevels.length === 0 && <tr><td className="p-4 text-center text-slate-500">Belum ada tingkat taksonomi.</td></tr>}
+                      {bloomLevels.map((bloom, i) => (
+                        <tr key={i} className="border-b hover:bg-white">
+                          <td className="p-3 font-bold text-amber-700 uppercase">{bloom.id}</td>
+                          <td className="p-3 font-medium text-slate-700">{bloom.label}</td>
+                          <td className="p-3 text-right"><button onClick={() => handleRemoveBloom(bloom.id)} className="text-red-400 hover:text-red-600 p-1"><Trash2 className="w-4 h-4"/></button></td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* TAB 2: DATA USER & PEMANTAUAN RIWAYAT */}
         {adminTab === 'users' && (
           <div className="space-y-6 animate-in fade-in">
             {selectedUserHistory ? (
@@ -380,7 +517,7 @@ export default function AdminPage() {
                                             ))}
                                           </div>
                                         )}
-                                        <div className="mt-3 inline-block bg-indigo-50 border border-indigo-100 text-indigo-700 text-[10px] font-bold px-2 py-1 rounded">Target: {q.bloomLevel.split('(')[0].trim()}</div>
+                                        <div className="mt-3 inline-block bg-indigo-50 border border-indigo-100 text-indigo-700 text-[10px] font-bold px-2 py-1 rounded">Target: {q.bloomLevel ? q.bloomLevel.split('(')[0].trim() : 'N/A'}</div>
                                       </div>
                                     </div>
                                   </div>
@@ -456,7 +593,7 @@ export default function AdminPage() {
           </div>
         )}
 
-        {/* TAB: WHITELIST DOMAIN (FITUR BARU) */}
+        {/* TAB 3: WHITELIST DOMAIN */}
         {adminTab === 'domains' && (
           <div className="bg-white border rounded-xl shadow-sm overflow-hidden animate-in fade-in max-w-4xl">
             <div className="p-4 bg-slate-50 border-b font-bold text-slate-700 flex items-center">
@@ -500,7 +637,7 @@ export default function AdminPage() {
           </div>
         )}
 
-        {/* TAB: PENGATURAN PAKET & BANK */}
+        {/* TAB 4: PENGATURAN PAKET & BANK */}
         {adminTab === 'settings' && (
           <div className="space-y-6 animate-in fade-in">
             <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center bg-white p-5 rounded-xl border shadow-sm gap-4">
