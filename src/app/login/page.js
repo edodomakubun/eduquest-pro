@@ -1,34 +1,13 @@
 'use client'; 
 
 import React, { useState, useEffect } from 'react';
-import { BookOpen, Sparkles, Clock, ShieldCheck, Loader2, AlertCircle, Wand2, Mail, Lock, Eye, EyeOff, ArrowRight, Globe, Settings } from 'lucide-react';
-
-// --- MOCK SETUP UNTUK PREVIEW ---
-const useRouter = () => ({ 
-  push: (path) => alert(`[Simulasi Navigasi Next.js]\nMengarahkan ke halaman: ${path}`) 
-});
-
-const auth = {};
-const googleProvider = {};
-const db = {};
-const signInWithPopup = async () => {
-  return new Promise((resolve) => {
-    setTimeout(() => resolve({ user: { email: 'test@guru.sd.belajar.id' } }), 1000);
-  });
-};
-const onAuthStateChanged = (auth, callback) => {
-  // Simulasi cek autentikasi
-  setTimeout(() => callback(null), 800);
-  return () => {};
-};
-const signOut = async () => {};
-const doc = () => ({});
-const getDoc = async () => ({ exists: () => true, data: () => ({ list: ['@guru.sd.belajar.id'] }) });
-// --------------------------------
+import { useRouter } from 'next/navigation';
+import { BookOpen, Sparkles, Clock, ShieldCheck, Loader2, AlertCircle, Wand2, Mail, Lock, Eye, EyeOff, ArrowRight, Globe, Facebook } from 'lucide-react';
+import { auth, googleProvider, db } from '../../lib/firebase';
+import { signInWithPopup, onAuthStateChanged, signOut } from 'firebase/auth';
+import { doc, getDoc } from 'firebase/firestore';
 
 const appId = 'eduquest-pro';
-
-const MAINTENANCE_MODE = true; 
 
 export default function LoginPage() {
   const router = useRouter();
@@ -58,16 +37,6 @@ export default function LoginPage() {
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
-      // 🚧 JIKA MAINTENANCE MODE AKTIF: Otomatis Log-Out semua orang yang masuk
-      if (MAINTENANCE_MODE) {
-        if (currentUser) {
-          await signOut(auth);
-        }
-        setIsAuthLoading(false);
-        return; // Hentikan proses eksekusi di sini
-      }
-
-      // --- LOGIKA NORMAL (Jika tidak maintenance) ---
       if (currentUser) {
         const userEmail = currentUser.email || '';
         const access = await checkAccess(userEmail);
@@ -89,12 +58,6 @@ export default function LoginPage() {
   }, [router]);
 
   const handleGoogleLogin = async () => {
-    // Pencegahan ganda jika tombol entah bagaimana bisa diklik
-    if (MAINTENANCE_MODE) {
-      setErrorMsg("Aplikasi sedang dalam tahap pengembangan. Login dinonaktifkan sementara.");
-      return;
-    }
-
     setIsLoggingIn(true);
     setErrorMsg('');
     try {
@@ -122,8 +85,6 @@ export default function LoginPage() {
 
   const handleEmailLogin = (e) => {
     e.preventDefault();
-    if (MAINTENANCE_MODE) return;
-
     if (!email || !password) {
       setErrorMsg("Harap masukkan email dan password.");
       return;
@@ -142,13 +103,11 @@ export default function LoginPage() {
 
   return (
     <div className="min-h-screen w-full flex flex-col lg:flex-row font-sans relative overflow-hidden bg-slate-900 lg:bg-white">
-      {/* Background Ornamen */}
       <div className="absolute inset-0 lg:hidden bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-blue-900 via-slate-900 to-black z-0">
         <div className="absolute top-20 -left-20 w-72 h-72 bg-blue-600/20 rounded-full blur-3xl"></div>
         <div className="absolute bottom-10 -right-10 w-64 h-64 bg-indigo-600/20 rounded-full blur-3xl"></div>
       </div>
 
-      {/* Bagian Kiri (Hero) */}
       <div className="hidden lg:flex lg:w-[45%] xl:w-1/2 relative bg-gradient-to-br from-blue-700 via-blue-800 to-indigo-900 p-12 flex-col justify-between overflow-hidden shadow-2xl z-10">
          <div className="absolute top-0 left-0 w-full h-full overflow-hidden pointer-events-none">
            <div className="absolute -top-32 -left-32 w-[30rem] h-[30rem] bg-blue-500/30 rounded-full mix-blend-overlay filter blur-3xl"></div>
@@ -196,10 +155,8 @@ export default function LoginPage() {
          </div>
       </div>
 
-      {/* Bagian Kanan (Form / Maintenance Panel) */}
       <div className="w-full lg:w-[55%] xl:w-1/2 flex flex-col items-center justify-center p-4 sm:p-8 relative z-10 min-h-screen lg:min-h-0">
         <div className="w-full max-w-[420px] bg-white rounded-[2.5rem] shadow-2xl border border-slate-100 p-8 sm:p-10 animate-in fade-in slide-in-from-bottom-8 relative z-20">
-          
           <div className="text-center mb-8">
             <div className="lg:hidden flex items-center justify-center space-x-2 text-blue-600 mb-6">
               <div className="bg-blue-50 p-2.5 rounded-xl border border-blue-100">
@@ -207,90 +164,59 @@ export default function LoginPage() {
               </div>
               <span className="text-2xl font-extrabold tracking-tight text-slate-800">EduQuest<span className="text-blue-600">.ai</span></span>
             </div>
-            
-            {/* Teks Judul Berubah Tergantung Mode */}
-            <h2 className="text-2xl sm:text-3xl font-extrabold text-slate-900 mb-2">
-              {MAINTENANCE_MODE ? "Pemberitahuan" : "Selamat Datang"}
-            </h2>
-            <p className="text-slate-500 text-sm font-medium">
-              {MAINTENANCE_MODE ? "Informasi sistem terkini." : "Gunakan Akun Belajar.id untuk melanjutkan."}
-            </p>
+            <h2 className="text-2xl sm:text-3xl font-extrabold text-slate-900 mb-2">Selamat Datang</h2>
+            <p className="text-slate-500 text-sm font-medium">Gunakan Akun Belajar.id untuk melanjutkan.</p>
           </div>
 
-          {errorMsg && !MAINTENANCE_MODE && (
+          {errorMsg && (
             <div className="mb-6 bg-red-50/80 border border-red-200 text-red-600 px-4 py-3.5 rounded-2xl flex items-start text-left text-sm font-medium animate-in slide-in-from-top-2">
               <AlertCircle className="w-5 h-5 mr-3 shrink-0 mt-0.5" />
               <span className="leading-relaxed">{errorMsg}</span>
             </div>
           )}
 
-          {/* 🚧 BLOK KONDISIONAL: TAMPILKAN MAINTENANCE ATAU TAMPILKAN LOGIN */}
-          {MAINTENANCE_MODE ? (
-            
-            <div className="text-center py-6 animate-in zoom-in-95 duration-500">
-               <div className="bg-amber-100 w-24 h-24 rounded-full flex items-center justify-center mx-auto mb-6 relative">
-                  <div className="absolute inset-0 bg-amber-200 rounded-full animate-ping opacity-20"></div>
-                  <Settings className="w-12 h-12 text-amber-600 animate-[spin_4s_linear_infinite]" />
-               </div>
-               <h3 className="text-xl font-bold text-slate-800 mb-3 leading-tight">Sedang Dalam<br/>Pengembangan Lebih Lanjut</h3>
-               <p className="text-slate-500 text-sm leading-relaxed font-medium mb-2">
-                 EduQuest.ai saat ini ditutup sementara untuk proses peningkatan infrastruktur dan penambahan fitur-fitur baru yang lebih canggih.
-               </p>
-               <p className="text-slate-500 text-sm leading-relaxed font-medium">
-                 Kami akan segera kembali. Terima kasih atas dukungan dan pengertian Anda!
-               </p>
+          <form onSubmit={handleEmailLogin} className="space-y-5 mb-8">
+            <div className="space-y-1.5">
+              <label className="text-sm font-bold text-slate-700 ml-1">Email Sekolah / Institusi</label>
+              <div className="relative flex items-center bg-slate-50 border border-slate-200 rounded-2xl px-4 py-3.5 focus-within:ring-4 focus-within:ring-blue-500/20 focus-within:border-blue-500 transition-all group">
+                <Mail className="w-5 h-5 text-slate-400 group-focus-within:text-blue-500 transition-colors" />
+                <input 
+                  type="email" value={email} onChange={(e) => setEmail(e.target.value)}
+                  placeholder="nama@institusi.id" 
+                  className="w-full bg-transparent outline-none ml-3 text-sm text-slate-800 placeholder-slate-400 font-medium"
+                />
+              </div>
             </div>
 
-          ) : (
-
-            /* --- FORM LOGIN NORMAL --- */
-            <>
-              <form onSubmit={handleEmailLogin} className="space-y-5 mb-8">
-                <div className="space-y-1.5">
-                  <label className="text-sm font-bold text-slate-700 ml-1">Email Sekolah / Institusi</label>
-                  <div className="relative flex items-center bg-slate-50 border border-slate-200 rounded-2xl px-4 py-3.5 focus-within:ring-4 focus-within:ring-blue-500/20 focus-within:border-blue-500 transition-all group">
-                    <Mail className="w-5 h-5 text-slate-400 group-focus-within:text-blue-500 transition-colors" />
-                    <input 
-                      type="email" value={email} onChange={(e) => setEmail(e.target.value)}
-                      placeholder="nama@institusi.id" 
-                      className="w-full bg-transparent outline-none ml-3 text-sm text-slate-800 placeholder-slate-400 font-medium"
-                    />
-                  </div>
-                </div>
-
-                <div className="space-y-1.5">
-                  <label className="text-sm font-bold text-slate-700 ml-1">Kata Sandi</label>
-                  <div className="relative flex items-center bg-slate-50 border border-slate-200 rounded-2xl px-4 py-3.5 focus-within:ring-4 focus-within:ring-blue-500/20 focus-within:border-blue-500 transition-all group">
-                    <Lock className="w-5 h-5 text-slate-400 group-focus-within:text-blue-500 transition-colors" />
-                    <input 
-                      type={showPassword ? "text" : "password"} value={password} onChange={(e) => setPassword(e.target.value)}
-                      placeholder="••••••••" 
-                      className="w-full bg-transparent outline-none ml-3 text-sm text-slate-800 placeholder-slate-400 font-medium"
-                    />
-                    <button type="button" onClick={() => setShowPassword(!showPassword)} className="text-slate-400 hover:text-slate-600 focus:outline-none transition-colors ml-2">
-                      {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
-                    </button>
-                  </div>
-                </div>
-
-                <button type="submit" className="w-full bg-slate-900 hover:bg-slate-800 text-white font-bold py-3.5 px-4 rounded-2xl transition-all shadow-lg shadow-slate-900/20 flex items-center justify-center group">
-                  Masuk <ArrowRight className="w-4 h-4 ml-2 group-hover:translate-x-1 transition-transform" />
+            <div className="space-y-1.5">
+              <label className="text-sm font-bold text-slate-700 ml-1">Kata Sandi</label>
+              <div className="relative flex items-center bg-slate-50 border border-slate-200 rounded-2xl px-4 py-3.5 focus-within:ring-4 focus-within:ring-blue-500/20 focus-within:border-blue-500 transition-all group">
+                <Lock className="w-5 h-5 text-slate-400 group-focus-within:text-blue-500 transition-colors" />
+                <input 
+                  type={showPassword ? "text" : "password"} value={password} onChange={(e) => setPassword(e.target.value)}
+                  placeholder="••••••••" 
+                  className="w-full bg-transparent outline-none ml-3 text-sm text-slate-800 placeholder-slate-400 font-medium"
+                />
+                <button type="button" onClick={() => setShowPassword(!showPassword)} className="text-slate-400 hover:text-slate-600 focus:outline-none transition-colors ml-2">
+                  {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
                 </button>
-              </form>
-
-              <div className="flex items-center justify-between mb-8">
-                <div className="w-full h-[1px] bg-slate-200"></div><span className="px-4 text-xs font-bold text-slate-400 uppercase tracking-wider">Atau</span><div className="w-full h-[1px] bg-slate-200"></div>
               </div>
+            </div>
 
-              <button onClick={handleGoogleLogin} disabled={isLoggingIn} className="w-full bg-white hover:bg-slate-50 focus:ring-4 focus:ring-blue-500/20 border-2 border-slate-200 text-slate-700 font-bold py-3.5 px-4 rounded-2xl flex items-center justify-center transition-all hover:border-slate-300 disabled:opacity-70 disabled:cursor-not-allowed group shadow-sm">
-                {isLoggingIn ? <Loader2 className="w-6 h-6 animate-spin text-blue-600" /> : <><img src="https://img.icons8.com/color/48/google-logo.png" alt="Google" className="w-6 h-6 mr-3 group-hover:scale-110 transition-transform"/><span className="text-sm">Lanjutkan dengan Akun Google</span></>}
-              </button>
-            </>
-          )}
+            <button type="submit" className="w-full bg-slate-900 hover:bg-slate-800 text-white font-bold py-3.5 px-4 rounded-2xl transition-all shadow-lg shadow-slate-900/20 flex items-center justify-center group">
+              Masuk <ArrowRight className="w-4 h-4 ml-2 group-hover:translate-x-1 transition-transform" />
+            </button>
+          </form>
 
+          <div className="flex items-center justify-between mb-8">
+            <div className="w-full h-[1px] bg-slate-200"></div><span className="px-4 text-xs font-bold text-slate-400 uppercase tracking-wider">Atau</span><div className="w-full h-[1px] bg-slate-200"></div>
+          </div>
+
+          <button onClick={handleGoogleLogin} disabled={isLoggingIn} className="w-full bg-white hover:bg-slate-50 focus:ring-4 focus:ring-blue-500/20 border-2 border-slate-200 text-slate-700 font-bold py-3.5 px-4 rounded-2xl flex items-center justify-center transition-all hover:border-slate-300 disabled:opacity-70 disabled:cursor-not-allowed group shadow-sm">
+            {isLoggingIn ? <Loader2 className="w-6 h-6 animate-spin text-blue-600" /> : <><img src="https://img.icons8.com/color/48/google-logo.png" alt="Google" className="w-6 h-6 mr-3 group-hover:scale-110 transition-transform"/><span className="text-sm">Lanjutkan dengan Akun Google</span></>}
+          </button>
         </div>
 
-        {/* Footer / Credits */}
         <div className="mt-12 text-center animate-in fade-in slide-in-from-bottom-12 relative z-10">
           <p className="text-xs font-bold uppercase tracking-widest text-slate-400 lg:text-slate-400 mb-4">Dikembangkan Oleh</p>
           <div className="flex items-center justify-center space-x-6 sm:space-x-8">
@@ -299,9 +225,7 @@ export default function LoginPage() {
             </a>
             <div className="w-1.5 h-1.5 rounded-full bg-slate-600/30 lg:bg-slate-300"></div>
             <a href="https://www.facebook.com/dmkbn.e" target="_blank" rel="noopener noreferrer" className="flex items-center text-sm font-bold text-slate-300 lg:text-slate-500 hover:text-blue-400 lg:hover:text-blue-600 transition-colors group">
-              <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-4 h-4 mr-2 text-slate-400 lg:text-slate-400 group-hover:text-blue-400 lg:group-hover:text-blue-600 transition-colors">
-                <path d="M18 2h-3a5 5 0 0 0-5 5v3H7v4h3v8h4v-8h3l1-4h-4V7a1 1 0 0 1 1-1h3z"></path>
-              </svg>
+              <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-4 h-4 mr-2 text-slate-400 lg:text-slate-400 group-hover:text-blue-400 lg:group-hover:text-blue-600 transition-colors"><path d="M18 2h-3a5 5 0 0 0-5 5v3H7v4h3v8h4v-8h3l1-4h-4V7a1 1 0 0 1 1-1h3z"></path></svg>
               Facebook
             </a>
           </div>
