@@ -360,7 +360,7 @@ export default function GeneratePage() {
                               <span className="text-sm font-medium text-slate-700">{type.label}</span>
                             </label>
                             {type.checked && !isLocked && (
-                              <div className="flex items-center space-x-2"><input type="number" min="1" max="20" value={type.count} onChange={(e) => { const newTypes = [...formData.questionTypes]; newTypes[index].count = parseInt(e.target.value) || 1; setFormData({...formData, questionTypes: newTypes}); }} className="w-14 border rounded px-2 py-1 text-sm outline-none text-center" /></div>
+                              <div className="flex items-center space-x-2"><input type="number" min="1" max="40" value={type.count} onChange={(e) => { const newTypes = [...formData.questionTypes]; newTypes[index].count = parseInt(e.target.value) || 1; setFormData({...formData, questionTypes: newTypes}); }} className="w-14 border rounded px-2 py-1 text-sm outline-none text-center" /></div>
                             )}
                           </div>
                         );
