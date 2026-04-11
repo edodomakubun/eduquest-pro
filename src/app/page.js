@@ -50,9 +50,12 @@ export default function Dashboard() {
         if (access === 'admin') {
           router.push('/admin');
         } else if (access === 'user') {
-          const level = email.toLowerCase().includes('@guru.smp.belajar.id') ? 'SMP' : 'SD';
+          const profileRef = doc(db, 'artifacts', appId, 'public', 'data', 'profiles', currentUser.uid);
+          const profileSnap = await getDoc(profileRef);
+          const profileData = profileSnap.exists() ? profileSnap.data() : null;
+          const level = profileData?.schoolLevel || (email.toLowerCase().includes('@guru.smp.belajar.id') ? 'SMP' : 'SD');
           setSchoolLevel(level);
-          setUser({ uid: currentUser.uid, name: currentUser.displayName || 'Guru', email: email });
+          setUser({ uid: currentUser.uid, name: currentUser.displayName || profileData?.name || 'Guru', email: email });
         } else {
           await signOut(auth);
           router.push('/login');
@@ -71,7 +74,8 @@ export default function Dashboard() {
       if (docSnap.exists()) {
         const data = docSnap.data();
         setCoins(data.coins);
-        setIsPremium(data.isPremium || false); 
+        setIsPremium(data.isPremium || false);
+        if (data.schoolLevel) setSchoolLevel(data.schoolLevel);
       } else {
         setDoc(userDocRef, { name: user.name, email: user.email, coins: 20, isPremium: false, createdAt: new Date().toISOString() });
         setCoins(20);

@@ -98,14 +98,17 @@ export default function GeneratePage() {
         if (access === 'admin') {
           router.push('/admin');
         } else if (access === 'user') {
-          const level = email.toLowerCase().includes('@guru.smp.belajar.id') ? 'SMP' : 'SD';
+          const profileRef = doc(db, 'artifacts', appId, 'public', 'data', 'profiles', currentUser.uid);
+          const profileSnap = await getDoc(profileRef);
+          const profileData = profileSnap.exists() ? profileSnap.data() : null;
+          const level = profileData?.schoolLevel || (email.toLowerCase().includes('@guru.smp.belajar.id') ? 'SMP' : 'SD');
           setSchoolLevel(level);
           setFormData(prev => ({
-             ...prev, 
-             schoolLevel: level, 
+             ...prev,
+             schoolLevel: level,
              grade: level === 'SMP' ? '7 (Fase D)' : '1 (Fase A)'
           }));
-          setUser({ uid: currentUser.uid, name: currentUser.displayName || 'Guru', email: email });
+          setUser({ uid: currentUser.uid, name: currentUser.displayName || profileData?.name || 'Guru', email: email });
         } else {
           await signOut(auth);
           router.push('/login');
@@ -122,8 +125,17 @@ export default function GeneratePage() {
     const userDocRef = doc(db, 'artifacts', appId, 'public', 'data', 'profiles', user.uid);
     const unsubUser = onSnapshot(userDocRef, (docSnap) => {
       if (docSnap.exists()) {
-        setCoins(docSnap.data().coins);
-        setIsPremium(docSnap.data().isPremium || false); 
+        const data = docSnap.data();
+        setCoins(data.coins);
+        setIsPremium(data.isPremium || false);
+        if (data.schoolLevel) {
+          setSchoolLevel(data.schoolLevel);
+          setFormData(prev => ({
+            ...prev,
+            schoolLevel: data.schoolLevel,
+            grade: data.schoolLevel === 'SMP' ? '7 (Fase D)' : '1 (Fase A)'
+          }));
+        }
       }
     });
     return () => unsubUser();
