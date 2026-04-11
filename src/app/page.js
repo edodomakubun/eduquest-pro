@@ -7,14 +7,14 @@ import {
   BookOpen, Wand2, Download, LogOut, 
   Coins, ShieldAlert, Clock, Eye, FileText, 
   CheckCircle2, AlertCircle, Loader2, ChevronLeft, Settings, Zap,
-  LayoutGrid // <-- Import icon baru untuk Kisi-Kisi
+  LayoutGrid
 } from 'lucide-react';
 
 import { auth, db } from '../lib/firebase';
 import { onAuthStateChanged, signOut } from 'firebase/auth';
 import { doc, getDoc, setDoc, onSnapshot, collection } from 'firebase/firestore';
 import { exportToWord } from '../lib/exportWord';
-import { exportToWordKisiKisi } from '../lib/exportwordkisikisi'; // <-- Pastikan fungsi ini bisa dipanggil jika user melihat riwayat kisi-kisi
+import { exportToWordKisiKisi } from '../lib/exportwordkisikisi'; 
 
 const appId = 'eduquest-pro';
 
@@ -27,13 +27,14 @@ export default function Dashboard() {
   
   const [historyData, setHistoryData] = useState([]);
   const [viewingHistory, setViewingHistory] = useState(null); 
+  const [schoolLevel, setSchoolLevel] = useState('SD');
 
   const checkAccess = async (userEmail) => {
     if (userEmail === 'operator.sdinpresleling2023@gmail.com') return 'admin';
     try {
       const domainsRef = doc(db, 'artifacts', appId, 'public', 'data', 'settings', 'allowed_domains');
       const docSnap = await getDoc(domainsRef);
-      const domains = docSnap.exists() ? docSnap.data().list || [] : ['@guru.sd.belajar.id'];
+      const domains = docSnap.exists() ? docSnap.data().list || [] : ['@guru.sd.belajar.id', '@guru.smp.belajar.id'];
       
       const isAllowed = domains.some(domain => userEmail.toLowerCase().endsWith(domain.toLowerCase()));
       return isAllowed ? 'user' : 'denied';
@@ -49,6 +50,8 @@ export default function Dashboard() {
         if (access === 'admin') {
           router.push('/admin');
         } else if (access === 'user') {
+          const level = email.toLowerCase().includes('@guru.smp.belajar.id') ? 'SMP' : 'SD';
+          setSchoolLevel(level);
           setUser({ uid: currentUser.uid, name: currentUser.displayName || 'Guru', email: email });
         } else {
           await signOut(auth);
@@ -97,13 +100,15 @@ export default function Dashboard() {
 
   const showError = (msg) => { setErrorMsg(msg); setTimeout(() => setErrorMsg(''), 5000); };
 
-  // Fungsi helper untuk mengunduh ulang berdasarkan tipe riwayat
   const handleReDownload = () => {
     if (!viewingHistory) return;
+    // Inject the level just in case it's an old history entry
+    const historyForm = { ...viewingHistory.formData, schoolLevel: viewingHistory.formData.schoolLevel || schoolLevel };
+    
     if (viewingHistory.type === 'kisi_kisi') {
-      exportToWordKisiKisi(viewingHistory.formData, viewingHistory.kisiData, coins, showError);
+      exportToWordKisiKisi(historyForm, viewingHistory.kisiData, coins, showError);
     } else {
-      exportToWord(viewingHistory.formData, viewingHistory.questions, coins, showError);
+      exportToWord(historyForm, viewingHistory.questions, coins, showError);
     }
   };
 
@@ -233,16 +238,14 @@ export default function Dashboard() {
               </div>
             </div>
 
-            {/* Render Hasil Sesuai Tipe Riwayat (Soal vs Kisi-kisi) */}
             <div className="bg-white rounded-2xl shadow-sm border p-8 sm:p-12 mt-6 overflow-hidden">
               <div id="printable-doc-area">
                 <div className="text-center mb-10 text-slate-800">
-                  <h1 className="text-xl font-bold uppercase mb-1">{viewingHistory.examType === 'Kisi-Kisi Ujian' ? 'KISI-KISI PENYUSUNAN SOAL UJIAN' : `SOAL ${viewingHistory.examType} SD`}</h1>
+                  <h1 className="text-xl font-bold uppercase mb-1">{viewingHistory.examType === 'Kisi-Kisi Ujian' ? 'KISI-KISI PENYUSUNAN SOAL UJIAN' : `SOAL ${viewingHistory.examType} ${viewingHistory.formData.schoolLevel || schoolLevel}`}</h1>
                   <p className="text-md mb-0 font-medium">Mata Pelajaran: {viewingHistory.subject} | Kelas: {viewingHistory.grade}</p>
                 </div>
                 
                 {viewingHistory.type === 'kisi_kisi' ? (
-                  /* --- PREVIEW KISI-KISI --- */
                   <div className="overflow-x-auto w-full border border-slate-200 rounded-xl">
                     <table className="w-full text-sm text-left border-collapse min-w-[800px]">
                       <thead className="bg-emerald-100 text-emerald-900 border-b-2 border-emerald-200">
@@ -272,7 +275,6 @@ export default function Dashboard() {
                     </table>
                   </div>
                 ) : (
-                  /* --- PREVIEW SOAL BIASA --- */
                   <div className="space-y-10">
                     {(() => {
                       const grouped = viewingHistory.questions?.reduce((acc, q) => { const type = q.type || 'Lainnya'; if (!acc[type]) acc[type] = []; acc[type].push(q); return acc; }, {}) || {};
@@ -312,7 +314,6 @@ export default function Dashboard() {
         ) : (
           <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4">
             
-            {/* --- KARTU WELCOME & TOMBOL AKSI UTAMA --- */}
             <div className="bg-white rounded-3xl p-8 border border-slate-200 shadow-sm flex flex-col md:flex-row items-center justify-between gap-6 relative overflow-hidden">
               <div className="absolute top-0 right-0 w-64 h-64 bg-blue-50 rounded-full blur-3xl -z-10 transform translate-x-1/2 -translate-y-1/2"></div>
               <div className="text-center md:text-left">
@@ -320,10 +321,9 @@ export default function Dashboard() {
                 <p className="text-slate-600 text-lg">Selamat datang di Dasbor EduQuest. Apa yang ingin Anda buat hari ini?</p>
               </div>
               
-              {/* TOMBOL BERJEJER UNTUK SOAL & KISI-KISI */}
               <div className="flex flex-col sm:flex-row gap-3 w-full md:w-auto shrink-0">
                 <Link href="/generate" className="flex-1 sm:flex-none bg-blue-600 hover:bg-blue-700 text-white px-6 py-4 rounded-xl font-bold transition-all shadow-md hover:shadow-lg flex items-center justify-center">
-                  <Wand2 className="w-5 h-5 mr-2" /> Buat Soal
+                  <Wand2 className="w-5 h-5 mr-2" /> Buat Soal {schoolLevel}
                 </Link>
                 <Link href="/generate-kisi" className="flex-1 sm:flex-none bg-indigo-600 hover:bg-indigo-700 text-white px-6 py-4 rounded-xl font-bold transition-all shadow-md hover:shadow-lg flex items-center justify-center">
                   <LayoutGrid className="w-5 h-5 mr-2" /> Buat Kisi-Kisi
@@ -331,7 +331,6 @@ export default function Dashboard() {
               </div>
             </div>
 
-            {/* Tabel Riwayat (History) */}
             <div className="bg-white rounded-3xl shadow-sm border border-slate-200 overflow-hidden">
                <div className="p-6 border-b border-slate-200 flex items-center justify-between bg-slate-50/50">
                  <h2 className="text-lg font-bold text-slate-800 flex items-center">

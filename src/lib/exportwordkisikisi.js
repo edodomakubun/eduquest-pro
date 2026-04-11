@@ -1,12 +1,13 @@
 export const exportToWordKisiKisi = (formData, kisiData, coins, showError) => {
   try {
     const totalSoal = parseInt(formData.pgCount||0) + parseInt(formData.esaiCount||0) + parseInt(formData.bsCount||0) + parseInt(formData.jodohCount||0) + parseInt(formData.ceritaCount||0);
+    const schoolLevel = formData.schoolLevel || 'SD';
 
     let wordHTML = `
       <html xmlns:o='urn:schemas-microsoft-com:office:office' xmlns:w='urn:schemas-microsoft-com:office:word' xmlns='http://www.w3.org/TR/REC-html40'>
       <head>
         <meta charset='utf-8'>
-        <title>Kisi-Kisi Ujian</title>
+        <title>Kisi-Kisi Ujian ${schoolLevel}</title>
         <style>
           body { font-family: 'Times New Roman', serif; font-size: 11pt; line-height: 1.5; color: black; }
           .header-title { text-align: center; font-weight: bold; font-size: 14pt; margin-bottom: 25px; }
@@ -27,7 +28,7 @@ export const exportToWordKisiKisi = (formData, kisiData, coins, showError) => {
         <div class="header-title">KISI-KISI PENYUSUNAN SOAL UJIAN</div>
         
         <table class="meta-table">
-          <tr><td>Jenjang Pendidikan</td><td>:</td><td>SD</td></tr>
+          <tr><td>Jenjang Pendidikan</td><td>:</td><td>${schoolLevel}</td></tr>
           <tr><td>Mata Pelajaran</td><td>:</td><td>${formData.subject}</td></tr>
           <tr><td>Kurikulum</td><td>:</td><td>${formData.curriculum}</td></tr>
           <tr><td>Kelas / Fase</td><td>:</td><td>${formData.grade}</td></tr>

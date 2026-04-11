@@ -1,16 +1,19 @@
 export const exportToWord = (formData, questions, coins, showError) => {
+    const schoolLevel = formData.schoolLevel || 'SD';
+
     let wordHTML = `
-      <html xmlns:o='urn:schemas-microsoft-com:office:office' xmlns:w='urn:schemas-microsoft-com:office:word' xmlns='[http://www.w3.org/TR/REC-html40](http://www.w3.org/TR/REC-html40)'>
+      <html xmlns:o='urn:schemas-microsoft-com:office:office' xmlns:w='urn:schemas-microsoft-com:office:word' xmlns='http://www.w3.org/TR/REC-html40'>
       <head>
         <meta charset='utf-8'>
-        <title>Soal Ujian SD</title>
+        <title>Soal Ujian ${schoolLevel}</title>
         <style>
           body { font-family: 'Arial', sans-serif; font-size: 11pt; line-height: 1.5; color: black; }
+          .logo-container { text-align: center; margin-bottom: 15px; }
           .header-title { text-align: center; font-weight: bold; margin-bottom: 20px; }
           .question-block { margin-bottom: 15px; page-break-inside: avoid; }
           .options { margin-left: 20px; margin-top: 5px; }
           .option-item { margin-bottom: 4px; }
-          img { width: 200px; height: auto; margin-top: 10px; margin-bottom: 10px; }
+          img.q-img { width: 200px; height: auto; margin-top: 10px; margin-bottom: 10px; }
           .page-break { page-break-before: always; }
           table.content-table { width: 100%; border-collapse: collapse; margin-top: 10px; }
           table.content-table th, table.content-table td { border: 1px solid black; padding: 8px; text-align: left; }
@@ -19,7 +22,7 @@ export const exportToWord = (formData, questions, coins, showError) => {
       </head>
       <body>
         <div class="header-title">
-          <span style="font-size: 14pt; text-transform: uppercase;">SOAL ${formData.examType} SD</span><br>
+          <span style="font-size: 14pt; text-transform: uppercase;">SOAL ${formData.examType} ${schoolLevel}</span><br>
           <span style="font-size: 11pt; font-weight: normal;">Mata Pelajaran: ${formData.subject} | Kelas: ${formData.grade}</span>
         </div>
     `;
@@ -38,11 +41,11 @@ export const exportToWord = (formData, questions, coins, showError) => {
         wordHTML += `
           <div class="question-block">
             <div><b>${globalIndex}.</b> ${q.text}</div>
-            ${q.imageUrl ? `<div><img src="${q.imageUrl}" width="200" alt="Ilustrasi"/></div>` : ''}
+            ${q.imageUrl ? `<div><img src="${q.imageUrl}" class="q-img" alt="Ilustrasi"/></div>` : ''}
             <div class="options">
               ${q.options && q.options.length > 0 ? q.options.map(opt => `<div class="option-item">${opt}</div>`).join('') : ''}
             </div>
-            ${type.includes('Isian') || type.includes('Esai') || type.includes('Uraian') ? `<div style="margin-top: 15px; margin-bottom: 25px; color: #64748b;">Jawab: ________________________________________________________<br>________________________________________________________</div>` : ''}
+            ${type.includes('Isian') || type.includes('Esai') || type.includes('Uraian') || type.includes('Cerita') ? `<div style="margin-top: 15px; margin-bottom: 25px; color: #64748b;">Jawab: ________________________________________________________<br>________________________________________________________</div>` : ''}
           </div>
         `;
         globalIndex++;
@@ -52,7 +55,7 @@ export const exportToWord = (formData, questions, coins, showError) => {
     wordHTML += `
         <div class="page-break"></div>
         <div class="header">
-          <span style="font-size: 14pt;">KUNCI JAWABAN</span><br>
+          <span style="font-size: 14pt; font-weight: bold;">KUNCI JAWABAN</span><br>
           <span style="font-size: 11pt;">Mata Pelajaran: ${formData.subject} | Kelas: ${formData.grade}</span>
         </div>
         <table class="content-table">
@@ -78,5 +81,8 @@ export const exportToWord = (formData, questions, coins, showError) => {
     link.click();
     document.body.removeChild(link);
     URL.revokeObjectURL(url);
-    showError('Dokumen berhasil diunduh. Sisa koin Anda: ' + coins);
+    
+    if (typeof showError === 'function') {
+      showError('Dokumen berhasil diunduh. Sisa koin Anda: ' + coins);
+    }
 };

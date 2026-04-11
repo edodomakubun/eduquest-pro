@@ -16,8 +16,7 @@ const fetchAiRoleFromDB = async () => {
   } catch (error) {
     console.error("Gagal menarik Role AI:", error);
   }
-  // Default fallback jika belum di-set admin
-  return "Anda adalah asisten pembuat soal ujian untuk Guru SD di Indonesia. Pastikan bahasa mudah dipahami oleh anak Sekolah Dasar.";
+  return null;
 };
 
 // --- FUNGSI ANALISIS TAKSONOMI BLOOM (DIRECT GEMINI API) ---
@@ -25,11 +24,12 @@ export const analyzeBloomWithAI = async (levels, data, isPremium = false, retrie
   if (!isPremium) return "Fitur Analisis AI Taksonomi Bloom khusus untuk pengguna Premium.";
   if (!GEMINI_API_KEY) return "API Key Gemini belum dikonfigurasi di Environment Variables Vercel.";
 
+  const schoolLevel = data.schoolLevel || 'SD';
   const materiContext = data.rppText?.trim() ? `\n- Materi/Modul Ajar:\n"${data.rppText.substring(0, 1000)}..."` : `\n- Materi/Modul Ajar: (Belum ada materi)`;
   const kisiContext = data.kisiText?.trim() ? `\n- Kisi-Kisi Acuan:\n"${data.kisiText.substring(0, 1000)}..."` : '';
   
-  const systemRole = "Anda ahli kurikulum SD. Analisis SANGAT SINGKAT pilihan Taksonomi Bloom yang diberikan.";
-  const prompt = `Analisis pilihan Taksonomi Bloom: [${levels.join(', ')}]. Konteks: Kelas ${data.grade} SD, Mapel ${data.subject}, Ujian ${data.examType}. ${materiContext} ${kisiContext} Respons WAJIB berupa 1-2 kalimat saja, gunakan teks bersih: - Jika sesuai: Berikan validasi singkat. - Jika kurang tepat: Awali dengan "⚠️ REKOMENDASI:", sebutkan tingkat yang seharusnya dan alasan 1 kalimat.`;
+  const systemRole = `Anda ahli kurikulum ${schoolLevel}. Analisis SANGAT SINGKAT pilihan Taksonomi Bloom yang diberikan.`;
+  const prompt = `Analisis pilihan Taksonomi Bloom: [${levels.join(', ')}]. Konteks: Kelas ${data.grade} ${schoolLevel}, Mapel ${data.subject}, Ujian ${data.examType}. ${materiContext} ${kisiContext} Respons WAJIB berupa 1-2 kalimat saja, gunakan teks bersih: - Jika sesuai: Berikan validasi singkat. - Jika kurang tepat: Awali dengan "⚠️ REKOMENDASI:", sebutkan tingkat yang seharusnya dan alasan 1 kalimat.`;
   
   const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${GEMINI_API_KEY}`;
   
@@ -74,15 +74,19 @@ export const callGeminiTextAPI = async (formData, isPremium = false, retries = 5
   const totalSoal = activeTypes.reduce((sum, t) => sum + t.count, 0);
   const activeBlooms = isPremium ? formData.bloomLevels.filter(b => b.checked).map(b => b.label).join(', ') : 'Tidak ada batasan Bloom';
   
-  const imageInstruction = isPremium ? `"imagePrompt": "Deskripsi gambar gaya KARTUN ANAK-ANAK. WAJIB BAHASA INDONESIA jika ada teks. Tulis 'none' jika tak butuh."` : `"imagePrompt": "none"`;
+  const schoolLevel = formData.schoolLevel || 'SD';
+  const imageInstruction = isPremium ? `"imagePrompt": "Deskripsi gambar gaya ilustrasi edukatif anak ${schoolLevel}. WAJIB BAHASA INDONESIA jika ada teks. Tulis 'none' jika tak butuh."` : `"imagePrompt": "none"`;
 
-  const systemRole = await fetchAiRoleFromDB();
+  let systemRole = await fetchAiRoleFromDB();
+  if (!systemRole) {
+    systemRole = `Anda adalah asisten pembuat soal ujian untuk Guru ${schoolLevel} di Indonesia. Pastikan tingkat kesulitan dan bahasa sesuai untuk siswa tingkat ${schoolLevel}.`;
+  }
 
   const materiContext = formData.rppText?.trim() ? `Materi Sumber:\n"""\n${formData.rppText.substring(0, 3000)}\n"""\n` : '';
   const kisiContext = formData.kisiText?.trim() ? `Kisi-Kisi Acuan:\n"""\n${formData.kisiText.substring(0, 3000)}\n"""\n(PASTIKAN soal yang Anda buat BENAR-BENAR MENGIKUTI acuan indikator pada kisi-kisi ini!)\n` : '';
 
   const prompt = `TUGAS SAAT INI:
-  Anda DIWAJIBKAN membuat TEPAT ${totalSoal} soal ujian untuk kelas ${formData.grade} SD, mapel ${formData.subject}. Ujian: ${formData.examType}. 
+  Anda DIWAJIBKAN membuat TEPAT ${totalSoal} soal ujian untuk kelas ${formData.grade} ${schoolLevel}, mapel ${formData.subject}. Ujian: ${formData.examType}. 
   
   KOMPOSISI SOAL WAJIB (JUMLAH HARUS PERSIS): 
   ${typesInstruction}
@@ -155,10 +159,14 @@ export const callGeminiKisiKisiAPI = async (formData, isPremium = false, retries
   }
   if (!GEMINI_API_KEY) throw new Error("API Key Gemini belum dikonfigurasi di Environment Variables Vercel.");
 
-  const systemRole = await fetchAiRoleFromDB();
+  const schoolLevel = formData.schoolLevel || 'SD';
+  let systemRole = await fetchAiRoleFromDB();
+  if (!systemRole) {
+    systemRole = `Anda adalah ahli kurikulum untuk tingkat ${schoolLevel} di Indonesia.`;
+  }
 
   const prompt = `TUGAS SAAT INI:
-  Bertindaklah sebagai ahli pembuat kurikulum Sekolah Dasar (SD) di Indonesia. Buatlah Kisi-Kisi Penyusunan Soal Ujian yang komprehensif, logis, dan terstruktur.
+  Bertindaklah sebagai ahli pembuat kurikulum ${schoolLevel} di Indonesia. Buatlah Kisi-Kisi Penyusunan Soal Ujian yang komprehensif, logis, dan terstruktur.
   
   PARAMETER KISI-KISI (JUMLAH HARUS TEPAT ${totalSoal} BARIS KISI-KISI):
   - Mata Pelajaran: ${formData.subject}
@@ -236,7 +244,7 @@ export const callGeminiKisiKisiAPI = async (formData, isPremium = false, retries
 
 // --- FUNGSI GENERATE GAMBAR (GEMINI 2.5 FLASH IMAGE - MURNI API GOOGLE) ---
 export const callImagenAPI = async (promptText, retries = 3) => {
-  const finalPrompt = `cute, colorful cartoon style illustration for elementary school educational material. Highly relevant to the subject context. Child safe, vivid colors, clear outlines. Concept: ${promptText}`;
+  const finalPrompt = `high quality educational illustration, vivid colors, clear outlines. Concept: ${promptText}`;
   
   if (!GEMINI_API_KEY) {
     console.error("API Key Gemini Image tidak ditemukan di Vercel.");

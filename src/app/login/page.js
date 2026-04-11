@@ -25,7 +25,8 @@ export default function LoginPage() {
     try {
       const domainsRef = doc(db, 'artifacts', appId, 'public', 'data', 'settings', 'allowed_domains');
       const docSnap = await getDoc(domainsRef);
-      const domains = docSnap.exists() ? docSnap.data().list || [] : ['@guru.sd.belajar.id'];
+      // DITAMBAHKAN: Whitelist default untuk SD dan SMP
+      const domains = docSnap.exists() ? docSnap.data().list || [] : ['@guru.sd.belajar.id', '@guru.smp.belajar.id'];
       
       const isAllowed = domains.some(domain => userEmail.toLowerCase().endsWith(domain.toLowerCase()));
       return isAllowed ? 'user' : 'denied';
@@ -123,7 +124,7 @@ export default function LoginPage() {
              <span className="text-3xl font-extrabold tracking-tight">EduQuest<span className="text-blue-300 font-medium">.ai</span></span>
            </div>
            <h1 className="text-4xl xl:text-5xl font-extrabold text-white leading-[1.15] mb-6">
-             Revolusi Pembuatan<br/>Soal untuk Guru SD
+             Revolusi Pembuatan<br/>Soal Guru SD & SMP
            </h1>
            <p className="text-blue-100/90 text-lg mb-12 max-w-md leading-relaxed font-medium">
              Buat soal ujian terstandarisasi, analisis Taksonomi Bloom, dan ilustrasi edukatif hanya dalam hitungan detik.

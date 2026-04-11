@@ -11,7 +11,7 @@ import {
 
 import { auth, db } from '../../lib/firebase';
 import { onAuthStateChanged, signOut } from 'firebase/auth';
-import { doc, getDoc, setDoc, onSnapshot, updateDoc, increment, collection, addDoc } from 'firebase/firestore';
+import { doc, getDoc, onSnapshot, updateDoc, increment, collection, addDoc } from 'firebase/firestore';
 import { analyzeBloomWithAI, callGeminiTextAPI, callImagenAPI } from '../../lib/ai';
 import { exportToWord } from '../../lib/exportWord';
 
@@ -28,16 +28,17 @@ export default function GeneratePage() {
   const [masterSubjects, setMasterSubjects] = useState(['Matematika']); 
   const [isLoadingMaster, setIsLoadingMaster] = useState(true);
   
-  // --- STATE BARU UNTUK KISI-KISI ---
   const [kisiPdfUrl, setKisiPdfUrl] = useState(null);
   const [isExtractingKisi, setIsExtractingKisi] = useState(false);
 
+  const [schoolLevel, setSchoolLevel] = useState('SD');
+
   const [formData, setFormData] = useState({
-    subject: 'Matematika', grade: '1', examType: 'Asesmen Formatif',
+    schoolLevel: 'SD',
+    subject: 'Matematika', grade: '1 (Fase A)', examType: 'Asesmen Formatif',
     bloomLevels: [], 
     questionTypes: [
       { id: 'pg', label: 'Pilihan Ganda', checked: true, count: 5 },
-      { id: 'pgk', label: 'Pilihan Ganda Kompleks', checked: true, count: 5 },
       { id: 'isian', label: 'Isian Singkat', checked: false, count: 5 },
       { id: 'esai', label: 'Uraian (Esai)', checked: false, count: 5 },
       { id: 'menjodohkan', label: 'Menjodohkan', checked: false, count: 5 },
@@ -45,7 +46,7 @@ export default function GeneratePage() {
       { id: 'cerita', label: 'Soal Cerita', checked: false, count: 5 },
     ],
     rppText: '',
-    kisiText: '' // Menyimpan teks ekstrak kisi-kisi untuk dibaca AI
+    kisiText: ''
   });
 
   const [questions, setQuestions] = useState([]);
@@ -59,7 +60,7 @@ export default function GeneratePage() {
     try {
       const domainsRef = doc(db, 'artifacts', appId, 'public', 'data', 'settings', 'allowed_domains');
       const docSnap = await getDoc(domainsRef);
-      const domains = docSnap.exists() ? docSnap.data().list || [] : ['@guru.sd.belajar.id'];
+      const domains = docSnap.exists() ? docSnap.data().list || [] : ['@guru.sd.belajar.id', '@guru.smp.belajar.id'];
       
       const isAllowed = domains.some(domain => userEmail.toLowerCase().endsWith(domain.toLowerCase()));
       return isAllowed ? 'user' : 'denied';
@@ -97,6 +98,13 @@ export default function GeneratePage() {
         if (access === 'admin') {
           router.push('/admin');
         } else if (access === 'user') {
+          const level = email.toLowerCase().includes('@guru.smp.belajar.id') ? 'SMP' : 'SD';
+          setSchoolLevel(level);
+          setFormData(prev => ({
+             ...prev, 
+             schoolLevel: level, 
+             grade: level === 'SMP' ? '7 (Fase D)' : '1 (Fase A)'
+          }));
           setUser({ uid: currentUser.uid, name: currentUser.displayName || 'Guru', email: email });
         } else {
           await signOut(auth);
@@ -139,7 +147,6 @@ export default function GeneratePage() {
   const showError = (msg) => { setErrorMsg(msg); setTimeout(() => setErrorMsg(''), 5000); };
 
   const generateQuestions = async () => {
-    // Memerlukan salah satu (RPP atau Kisi-Kisi)
     if (!formData.rppText.trim() && !formData.kisiText.trim()) return showError('Isi materi RPP atau unggah Kisi-Kisi terlebih dahulu.');
     if (formData.questionTypes.filter(t => t.checked && t.count > 0).length === 0) return showError('Pilih setidaknya satu jenis soal.');
     
@@ -181,6 +188,7 @@ export default function GeneratePage() {
       try {
         const historyColRef = collection(db, 'artifacts', appId, 'public', 'data', 'history', user.uid, 'saved_exams');
         await addDoc(historyColRef, {
+          type: 'soal',
           subject: formData.subject,
           grade: formData.grade,
           examType: formData.examType,
@@ -240,23 +248,15 @@ export default function GeneratePage() {
     e.target.value = null;
   };
 
-  // --- FUNGSI UPLOAD & BACA KISI-KISI PDF ---
   const handleKisiUpload = async (e) => {
     const file = e.target.files[0];
     if (!file) return;
-    
-    if (!isPremium) {
-      showError("Versi Free tidak dapat mengunggah Kisi-Kisi PDF. Silakan Upgrade Pro.");
-      e.target.value = null; return;
-    }
+    if (!isPremium) { showError("Versi Free tidak dapat mengunggah Kisi-Kisi PDF."); e.target.value = null; return; }
 
     if (file.type === 'application/pdf') {
-      if (!window.pdfjsLib) return showError('Sistem pembaca PDF belum siap, coba lagi.');
+      if (!window.pdfjsLib) return showError('Sistem pembaca PDF belum siap.');
       
-      // Bersihkan URL lama jika ada
       if (kisiPdfUrl) URL.revokeObjectURL(kisiPdfUrl);
-      
-      // Tampilkan PDF secara visual (100% native viewer browser)
       const fileUrl = URL.createObjectURL(file);
       setKisiPdfUrl(fileUrl);
       
@@ -265,21 +265,14 @@ export default function GeneratePage() {
         const arrayBuffer = await file.arrayBuffer();
         const pdf = await window.pdfjsLib.getDocument({ data: arrayBuffer }).promise;
         let fullText = '';
-        // Membaca teks hingga 5 halaman pertama untuk Kisi-kisi
         for (let i = 1; i <= Math.min(pdf.numPages, 5); i++) { 
           const page = await pdf.getPage(i);
           const textContent = await page.getTextContent();
           fullText += textContent.items.map(item => item.str).join(' ') + '\n';
         }
         setFormData(prev => ({ ...prev, kisiText: fullText }));
-      } catch (err) { 
-        showError('Gagal mengekstrak teks PDF Kisi-Kisi.'); 
-      } finally { 
-        setIsExtractingKisi(false); 
-      }
-    } else { 
-      showError('Format file Kisi-Kisi harus .pdf'); 
-    }
+      } catch (err) { showError('Gagal mengekstrak teks PDF Kisi-Kisi.'); } finally { setIsExtractingKisi(false); }
+    } else { showError('Format file Kisi-Kisi harus .pdf'); }
     e.target.value = null;
   };
 
@@ -296,6 +289,10 @@ export default function GeneratePage() {
     return () => clearTimeout(timeoutId);
   }, [JSON.stringify(formData.bloomLevels), formData.grade, formData.subject, formData.examType, formData.rppText, formData.kisiText, appState, isPremium]);
 
+  const gradeOptions = schoolLevel === 'SMP' 
+    ? ['7 (Fase D)', '8 (Fase D)', '9 (Fase D)'] 
+    : ['1 (Fase A)', '2 (Fase A)', '3 (Fase B)', '4 (Fase B)', '5 (Fase C)', '6 (Fase C)'];
+
   if (!user || isLoadingMaster) return <div className="min-h-screen flex items-center justify-center bg-slate-50"><Loader2 className="w-8 h-8 animate-spin text-blue-600"/></div>;
 
   return (
@@ -306,7 +303,7 @@ export default function GeneratePage() {
         <div className="max-w-6xl mx-auto px-4 h-16 flex items-center justify-between">
           <div className="flex items-center space-x-4">
             <Link href="/" className="bg-slate-100 hover:bg-slate-200 p-2 rounded-lg transition-colors"><ChevronLeft className="w-5 h-5 text-slate-600" /></Link>
-            <div className="flex items-center space-x-2 text-blue-600"><Wand2 className="w-6 h-6" /><span className="text-xl font-bold tracking-tight hidden sm:block">Buat Soal Baru</span></div>
+            <div className="flex items-center space-x-2 text-blue-600"><Wand2 className="w-6 h-6" /><span className="text-xl font-bold tracking-tight hidden sm:block">Buat Soal {schoolLevel}</span></div>
           </div>
           <div className="flex items-center space-x-3 sm:space-x-6">
             <div className="flex items-center bg-amber-50 border border-amber-200 px-3 py-1.5 rounded-full"><Coins className="w-4 h-4 text-amber-500 mr-2" /><span className="text-sm font-bold text-amber-700 mr-2">{coins}</span><Link href="/payment" className="ml-3 text-xs bg-amber-500 hover:bg-amber-600 text-white px-2 py-0.5 rounded transition-colors">+ Top Up</Link></div>
@@ -337,15 +334,15 @@ export default function GeneratePage() {
                   </div>
                   <div className="grid grid-cols-2 gap-4">
                     <div>
-                      <label className="block text-sm font-medium text-slate-700 mb-1">Kelas (SD)</label>
+                      <label className="block text-sm font-medium text-slate-700 mb-1">Kelas/Fase</label>
                       <select value={formData.grade} onChange={(e) => setFormData({...formData, grade: e.target.value})} className="w-full border rounded-lg px-3 py-2 outline-none focus:ring-2 focus:ring-blue-500 bg-white">
-                        {[1,2,3,4,5,6].map(num => <option key={num} value={num}>Kelas {num}</option>)}
+                        {gradeOptions.map(opt => <option key={opt} value={opt}>{opt}</option>)}
                       </select>
                     </div>
                     <div>
                       <label className="block text-sm font-medium text-slate-700 mb-1">Jenis Ujian</label>
                       <select value={formData.examType} onChange={(e) => setFormData({...formData, examType: e.target.value})} className="w-full border rounded-lg px-3 py-2 outline-none focus:ring-2 focus:ring-blue-500 bg-white">
-                        <option>Asesmen Formatif</option><option>Asesmen Sumatif</option><option>Sumatif Tengah Semester (STS)</option><option>Sumatif Akhir Semester (SAS)</option><option>Sumatif Akhir Tahun (SAT)</option><option>Penilaian Sumatif Akhir Jenjang (PSAJ)</option>
+                        <option>Asesmen Formatif</option><option>Asesmen Sumatif</option><option>Sumatif Tengah Semester (STS)</option><option>Sumatif Akhir Semester (SAS)</option><option>Sumatif Akhir Tahun (SAT)</option>
                       </select>
                     </div>
                   </div>
@@ -361,7 +358,7 @@ export default function GeneratePage() {
                               <span className="text-sm font-medium text-slate-700">{type.label}</span>
                             </label>
                             {type.checked && !isLocked && (
-                              <div className="flex items-center space-x-2"><input type="number" min="1" max="40" value={type.count} onChange={(e) => { const newTypes = [...formData.questionTypes]; newTypes[index].count = parseInt(e.target.value) || 1; setFormData({...formData, questionTypes: newTypes}); }} className="w-14 border rounded px-2 py-1 text-sm outline-none text-center" /></div>
+                              <div className="flex items-center space-x-2"><input type="number" min="1" max="20" value={type.count} onChange={(e) => { const newTypes = [...formData.questionTypes]; newTypes[index].count = parseInt(e.target.value) || 1; setFormData({...formData, questionTypes: newTypes}); }} className="w-14 border rounded px-2 py-1 text-sm outline-none text-center" /></div>
                             )}
                           </div>
                         );
@@ -394,9 +391,9 @@ export default function GeneratePage() {
                 
                 {/* MATERI POKOK / RPP */}
                 <h2 className="text-lg font-bold text-slate-800 mb-2 flex justify-between">
-                  <span className="flex items-center"><FileText className="w-5 h-5 mr-2 text-green-500" /> Materi / Modul Ajar</span>
+                  <span className="flex items-center"><FileText className="w-5 h-5 mr-2 text-green-500" /> Materi Sumber</span>
                   <label className={`cursor-pointer bg-blue-50 text-blue-700 hover:bg-blue-100 border border-blue-200 py-2 px-4 rounded-xl text-sm font-bold flex items-center transition-colors`}>
-                    <Upload className="w-4 h-4 mr-2" /> Unggah File RPP (.pdf)
+                    <Upload className="w-4 h-4 mr-2" /> Unggah File (.pdf)
                     <input type="file" accept=".txt,.pdf" className="hidden" onChange={handleFileUpload} disabled={!isPremium} />
                   </label>
                 </h2>
@@ -458,7 +455,10 @@ export default function GeneratePage() {
             
             <div className="bg-white rounded-2xl shadow-sm border p-8 sm:p-12">
               <div id="printable-doc-area">
-                <div className="text-center mb-10 text-slate-800"><h1 className="text-xl font-bold uppercase mb-1">SOAL {formData.examType} SD</h1><p className="text-md mb-0 font-medium">Mata Pelajaran: {formData.subject} | Kelas: {formData.grade}</p></div>
+                <div className="text-center mb-10 text-slate-800">
+                  <h1 className="text-xl font-bold uppercase mb-1">SOAL {formData.examType} {schoolLevel}</h1>
+                  <p className="text-md mb-0 font-medium">Mata Pelajaran: {formData.subject} | Kelas: {formData.grade}</p>
+                </div>
                 <div className="space-y-10">
                   {(() => {
                     const grouped = questions.reduce((acc, q) => { const type = q.type || 'Lainnya'; if (!acc[type]) acc[type] = []; acc[type].push(q); return acc; }, {});
@@ -477,7 +477,7 @@ export default function GeneratePage() {
                                     <div className="flex gap-2"><span className="font-bold text-slate-800">{currentIndex}.</span><div className="w-full text-base font-medium text-slate-800 outline-none min-h-[1.5em]" contentEditable suppressContentEditableWarning>{q.text}</div></div>
                                     {q.imageUrl && <div className="my-4"><img src={q.imageUrl} alt={`Ilustrasi`} width="200" style={{ width: '200px', height: 'auto', borderRadius: '8px' }} className="border border-slate-200 shadow-sm object-cover" /></div>}
                                     {q.options && q.options.length > 0 && <div className="options mt-3 space-y-2 pl-4 sm:pl-0">{q.options.map((opt, i) => <div key={i} className="text-slate-700 option-item flex items-start"><span>{opt}</span></div>)}</div>}
-                                    {(type.includes('Isian') || type.includes('Esai') || type.includes('Uraian')) && <div className="mt-4 border-b border-dashed border-slate-300 h-6 w-full max-w-lg" />}
+                                    {(type.includes('Isian') || type.includes('Esai') || type.includes('Uraian') || type.includes('Cerita')) && <div className="mt-4 border-b border-dashed border-slate-300 h-6 w-full max-w-lg" />}
                                   </div>
                                 </div>
                               </div>
