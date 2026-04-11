@@ -1,7 +1,7 @@
 'use client'; 
 
 import React, { useState, useEffect } from 'react';
-import { BookOpen, Sparkles, Clock, ShieldCheck, Loader2, AlertCircle, Wand2, Mail, Lock, Eye, EyeOff, ArrowRight, Globe, Facebook, Settings } from 'lucide-react';
+import { BookOpen, Sparkles, Clock, ShieldCheck, Loader2, AlertCircle, Wand2, Mail, Lock, Eye, EyeOff, ArrowRight, Globe, Settings } from 'lucide-react';
 
 // --- MOCK SETUP UNTUK PREVIEW ---
 const useRouter = () => ({ 
@@ -299,7 +299,9 @@ export default function LoginPage() {
             </a>
             <div className="w-1.5 h-1.5 rounded-full bg-slate-600/30 lg:bg-slate-300"></div>
             <a href="https://www.facebook.com/dmkbn.e" target="_blank" rel="noopener noreferrer" className="flex items-center text-sm font-bold text-slate-300 lg:text-slate-500 hover:text-blue-400 lg:hover:text-blue-600 transition-colors group">
-              <Facebook className="w-4 h-4 mr-2 text-slate-400 lg:text-slate-400 group-hover:text-blue-400 lg:group-hover:text-blue-600 transition-colors"/>
+              <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-4 h-4 mr-2 text-slate-400 lg:text-slate-400 group-hover:text-blue-400 lg:group-hover:text-blue-600 transition-colors">
+                <path d="M18 2h-3a5 5 0 0 0-5 5v3H7v4h3v8h4v-8h3l1-4h-4V7a1 1 0 0 1 1-1h3z"></path>
+              </svg>
               Facebook
             </a>
           </div>
