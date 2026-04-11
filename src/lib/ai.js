@@ -31,7 +31,7 @@ export const analyzeBloomWithAI = async (levels, data, isPremium = false, retrie
   const systemRole = "Anda ahli kurikulum SD. Analisis SANGAT SINGKAT pilihan Taksonomi Bloom yang diberikan.";
   const prompt = `Analisis pilihan Taksonomi Bloom: [${levels.join(', ')}]. Konteks: Kelas ${data.grade} SD, Mapel ${data.subject}, Ujian ${data.examType}. ${materiContext} ${kisiContext} Respons WAJIB berupa 1-2 kalimat saja, gunakan teks bersih: - Jika sesuai: Berikan validasi singkat. - Jika kurang tepat: Awali dengan "⚠️ REKOMENDASI:", sebutkan tingkat yang seharusnya dan alasan 1 kalimat.`;
   
-  const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${GEMINI_API_KEY}`;
+  const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${GEMINI_API_KEY}`;
   
   for (let i = 0; i < retries; i++) {
     const controller = new AbortController();
@@ -109,7 +109,7 @@ export const callGeminiTextAPI = async (formData, isPremium = false, retries = 5
   
   PERINGATAN KRITIS: Array "questions" HARUS memiliki TEPAT ${totalSoal} objek. Jangan kurang dari ${totalSoal}!`;
 
-  const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${GEMINI_API_KEY}`;
+  const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${GEMINI_API_KEY}`;
   
   for (let i = 0; i < retries; i++) {
     const controller = new AbortController();
@@ -194,7 +194,7 @@ export const callGeminiKisiKisiAPI = async (formData, isPremium = false, retries
     ]
   }`;
 
-  const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${GEMINI_API_KEY}`;
+  const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${GEMINI_API_KEY}`;
   
   for (let i = 0; i < retries; i++) {
     const controller = new AbortController();
