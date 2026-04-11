@@ -37,6 +37,7 @@ export default function GeneratePage() {
     bloomLevels: [], 
     questionTypes: [
       { id: 'pg', label: 'Pilihan Ganda', checked: true, count: 5 },
+      { id: 'pgk', label: 'Pilihan Ganda Kompleks', checked: true, count: 5 },
       { id: 'isian', label: 'Isian Singkat', checked: false, count: 5 },
       { id: 'esai', label: 'Uraian (Esai)', checked: false, count: 5 },
       { id: 'menjodohkan', label: 'Menjodohkan', checked: false, count: 5 },
