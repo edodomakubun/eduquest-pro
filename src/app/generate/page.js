@@ -344,7 +344,7 @@ export default function GeneratePage() {
                     <div>
                       <label className="block text-sm font-medium text-slate-700 mb-1">Jenis Ujian</label>
                       <select value={formData.examType} onChange={(e) => setFormData({...formData, examType: e.target.value})} className="w-full border rounded-lg px-3 py-2 outline-none focus:ring-2 focus:ring-blue-500 bg-white">
-                        <option>Asesmen Formatif</option><option>Asesmen Sumatif</option><option>Sumatif Tengah Semester (STS)</option><option>Sumatif Akhir Semester (SAS)</option><option>Sumatif Akhir Tahun (SAT)</option>
+                        <option>Asesmen Formatif</option><option>Asesmen Sumatif</option><option>Sumatif Tengah Semester (STS)</option><option>Sumatif Akhir Semester (SAS)</option><option>Sumatif Akhir Tahun (SAT)</option><option>Penilaian Sumatif Akhir Jenjang (PSAJ)</option>
                       </select>
                     </div>
                   </div>

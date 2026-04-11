@@ -3,8 +3,10 @@ import { doc, getDoc } from 'firebase/firestore';
 
 // Mengambil API Key dari brankas rahasia Vercel
 const OPENROUTER_API_KEY = process.env.NEXT_PUBLIC_OPENROUTER_API_KEY;
+// Menambahkan API Key Gemini khusus untuk Image Generation
+const GEMINI_API_KEY = process.env.NEXT_PUBLIC_GEMINI_API_KEY; 
 
-// Menggunakan Model Gemini 3.1 Flash Lite Preview
+// Menggunakan Model Gemini 3.1 Flash Lite Preview (Via OpenRouter untuk Text)
 const AI_MODEL = "google/gemini-3.1-flash-lite-preview"; 
 const appId = 'eduquest-pro';
 
@@ -19,7 +21,6 @@ const fetchAiRoleFromDB = async () => {
   } catch (error) {
     console.error("Gagal menarik Role AI:", error);
   }
-  // Default fallback jika belum di-set admin
   return "Anda adalah asisten pembuat soal ujian untuk Guru SD di Indonesia. Pastikan bahasa mudah dipahami oleh anak Sekolah Dasar.";
 };
 
@@ -41,7 +42,7 @@ export const analyzeBloomWithAI = async (levels, data, isPremium = false, retrie
     try {
       const response = await fetch(url, {
         method: 'POST',
-        signal: controller.signal, // Mencegah Hang
+        signal: controller.signal, 
         headers: { 
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${OPENROUTER_API_KEY}`,
@@ -105,12 +106,12 @@ export const callGeminiTextAPI = async (formData, isPremium = false, retries = 5
   
   for (let i = 0; i < retries; i++) {
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 60000); // 60 Detik Timeout
+    const timeoutId = setTimeout(() => controller.abort(), 60000); 
 
     try {
       const response = await fetch(url, {
         method: 'POST',
-        signal: controller.signal, // Mencegah Hang
+        signal: controller.signal, 
         headers: { 
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${OPENROUTER_API_KEY}`,
@@ -121,7 +122,7 @@ export const callGeminiTextAPI = async (formData, isPremium = false, retries = 5
           model: AI_MODEL,
           messages: [{ role: "user", content: prompt }],
           reasoning: { enabled: true },
-          response_format: { type: "json_object" }, // Memaksa output JSON murni
+          response_format: { type: "json_object" }, 
           max_tokens: 4000 
         })
       });
@@ -145,12 +146,10 @@ export const callGeminiTextAPI = async (formData, isPremium = false, retries = 5
   }
 };
 
-// --- FUNGSI BARU: GENERATE KISI-KISI SOAL ---
+// --- FUNGSI GENERATE KISI-KISI SOAL ---
 export const callGeminiKisiKisiAPI = async (formData, isPremium = false, retries = 5) => {
-  // Hitung ulang total semua jenis soal dari form yang sudah di-update
   const totalSoal = parseInt(formData.pgCount||0) + parseInt(formData.esaiCount||0) + parseInt(formData.bsCount||0) + parseInt(formData.jodohCount||0) + parseInt(formData.ceritaCount||0);
   
-  // Validasi Limit Free User
   if (!isPremium && totalSoal > 10) {
     throw new Error("Akses Ditolak: Versi Free maksimal menghasilkan 10 soal kisi-kisi. Silakan Upgrade Pro.");
   }
@@ -180,7 +179,7 @@ export const callGeminiKisiKisiAPI = async (formData, isPremium = false, retries
   1. Buat indikator soal yang spesifik, operasional (menggunakan KKO yang tepat), dan logis berdasarkan materi.
   2. Distribusikan level kognitif secara proporsional (gabungan dari L1/C1-C2, L2/C3, L3/C4-C6).
   3. Indikator biasanya berbunyi seperti: "Disajikan sebuah teks/gambar..., siswa dapat menentukan..."
-  4. Total baris kisi-kisi harus TEPAT ${totalSoal} baris (sesuai jumlah total dari semua jenis soal yang di-request).
+  4. Total baris kisi-kisi harus TEPAT ${totalSoal} baris.
   
   Respons WAJIB dalam format JSON murni TANPA awalan/akhiran markdown atau teks apapun:
   {
@@ -201,12 +200,12 @@ export const callGeminiKisiKisiAPI = async (formData, isPremium = false, retries
   
   for (let i = 0; i < retries; i++) {
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 60000); // 60 Detik Timeout
+    const timeoutId = setTimeout(() => controller.abort(), 60000); 
 
     try {
       const response = await fetch(url, {
         method: 'POST',
-        signal: controller.signal, // Mencegah Hang
+        signal: controller.signal, 
         headers: { 
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${OPENROUTER_API_KEY}`,
@@ -217,8 +216,8 @@ export const callGeminiKisiKisiAPI = async (formData, isPremium = false, retries
           model: AI_MODEL,
           messages: [{ role: "user", content: prompt }],
           reasoning: { enabled: true },
-          response_format: { type: "json_object" }, // Memaksa output JSON murni
-          max_tokens: 6000 // Kisi-kisi butuh token lebih besar
+          response_format: { type: "json_object" }, 
+          max_tokens: 6000 
         })
       });
       clearTimeout(timeoutId);
@@ -229,7 +228,6 @@ export const callGeminiKisiKisiAPI = async (formData, isPremium = false, retries
       let jsonText = data.choices?.[0]?.message?.content;
       if (!jsonText) throw new Error("Format respons AI kosong atau tidak valid.");
       
-      // Bersihkan markdown jika terbawa
       jsonText = jsonText.replace(/```json/g, '').replace(/```/g, '').trim();
       
       const parsedData = JSON.parse(jsonText);
@@ -245,49 +243,72 @@ export const callGeminiKisiKisiAPI = async (formData, isPremium = false, retries
   }
 };
 
-// Menggunakan Mode Frontend (Public Url) agar Gratis tanpa Rate Limit IP Server
-export const callImagenAPI = async (promptText, retries = 4) => {
-  const finalPrompt = `cute, colorful cartoon style illustration for elementary school educational material. Highly relevant to the subject context. IF there are any written words or texts in the image, THEY MUST BE WRITTEN IN INDONESIAN. Child safe. Concept: ${promptText}`;
+// --- FUNGSI GENERATE GAMBAR (MENGGUNAKAN GEMINI API IMAGEN-3.0) ---
+export const callImagenAPI = async (promptText, retries = 3) => {
+  const finalPrompt = `cute, colorful cartoon style illustration for elementary school educational material. Highly relevant to the subject context. Child safe, vivid colors, clear outlines. Concept: ${promptText}`;
   
-  for (let i = 0; i < retries; i++) {
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 20000); // 20 Detik Timeout per gambar
-
+  // Jika API Key Gemini tidak dipasang, gunakan sistem Pollinations (Fallback)
+  if (!GEMINI_API_KEY) {
+    console.warn("API Key Gemini Image tidak ditemukan, menggunakan fallback Pollinations...");
+    const fallbackUrl = `https://image.pollinations.ai/prompt/${encodeURIComponent(finalPrompt)}?width=400&height=400&nologo=true&seed=${Math.floor(Math.random() * 1000000)}`;
     try {
-      // 1. Tambahkan "seed" (angka acak) agar request dianggap baru dan tidak kena blokir cache CDN
-      const randomSeed = Math.floor(Math.random() * 1000000);
-      const imageUrl = `https://image.pollinations.ai/prompt/${encodeURIComponent(finalPrompt)}?width=400&height=400&nologo=true&seed=${randomSeed}`;
-      
-      // 2. Anti-Spam: Beri jeda/delay yang semakin lama setiap kali melakukan pengulangan
-      if (i > 0) {
-        console.warn(`Mengulang pemuatan gambar... Percobaan ke-${i+1}`);
-        await new Promise(r => setTimeout(r, 2000 * i)); 
-      }
-
-      // 3. Matikan policy referrer agar tidak ditolak oleh jaringan
-      const response = await fetch(imageUrl, { 
-        referrerPolicy: "no-referrer",
-        signal: controller.signal // Mencegah Hang
-      });
-      clearTimeout(timeoutId);
-      
-      if (!response.ok) throw new Error(`HTTP Error ${response.status}`);
-      
+      const response = await fetch(fallbackUrl, { referrerPolicy: "no-referrer" });
       const blob = await response.blob();
-      
       return await new Promise((resolve, reject) => {
         const reader = new FileReader();
         reader.onloadend = () => resolve(reader.result);
         reader.onerror = reject;
         reader.readAsDataURL(blob);
       });
+    } catch (e) { return null; }
+  }
+
+  // JIKA ADA API KEY: Gunakan Google Gemini Imagen 3 (Via REST API Resmi)
+  const url = `https://generativelanguage.googleapis.com/v1beta/models/imagen-3.0-generate-001:predict?key=${GEMINI_API_KEY}`;
+  
+  for (let i = 0; i < retries; i++) {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 30000); // 30 Detik Timeout
+
+    try {
+      if (i > 0) {
+        console.warn(`Mengulang pemuatan gambar dari Gemini API... Percobaan ke-${i+1}`);
+        await new Promise(r => setTimeout(r, 2000 * i)); 
+      }
+
+      const response = await fetch(url, {
+        method: 'POST',
+        signal: controller.signal,
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          instances: [{ prompt: finalPrompt }],
+          parameters: { sampleCount: 1, aspectRatio: "1:1" }
+        })
+      });
+      
+      clearTimeout(timeoutId);
+      
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error?.message || `HTTP Error ${response.status}`);
+      }
+      
+      const data = await response.json();
+      
+      // Mengambil Base64 mentah dari respons API Google
+      const base64Data = data.predictions?.[0]?.bytesBase64Encoded;
+      
+      if (base64Data) {
+        return `data:image/jpeg;base64,${base64Data}`;
+      } else {
+        throw new Error("Gambar tidak ditemukan dalam respons Gemini.");
+      }
       
     } catch (error) {
       clearTimeout(timeoutId);
-      // 4. Tangkap error (seperti ERR_CONNECTION_RESET), lalu ulang loop
       if (i === retries - 1) {
-        console.error("Gagal total mengonversi gambar setelah beberapa percobaan:", error);
-        return null; // Tetap kembalikan null agar tidak merusak aplikasi (gambar akan dilewati)
+        console.error("Gagal generate gambar via Gemini API:", error);
+        return null; 
       }
     }
   }
