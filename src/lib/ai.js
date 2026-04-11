@@ -7,7 +7,7 @@ const OPENROUTER_API_KEY = process.env.NEXT_PUBLIC_OPENROUTER_API_KEY;
 const GEMINI_API_KEY = process.env.NEXT_PUBLIC_GEMINI_API_KEY; 
 
 // Menggunakan Model Gemini 3.1 Flash Lite Preview (Via OpenRouter untuk Text)
-const AI_MODEL = "google/gemini-3.1-flash-lite-preview"; 
+const AI_MODEL = "google/gemma-4-31b-it:free"; 
 const appId = 'eduquest-pro';
 
 // --- FUNGSI MENGAMBIL INSTRUKSI AI DARI DATABASE ---
