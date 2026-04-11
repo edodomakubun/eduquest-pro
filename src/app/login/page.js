@@ -45,6 +45,13 @@ export default function LoginPage() {
         if (access === 'admin') {
           router.push('/admin');
         } else if (access === 'user') {
+          const disabled = await isAccountDisabled(currentUser.uid);
+          if (disabled) {
+            await signOut(auth);
+            setErrorMsg('Akun ini dinonaktifkan. Hubungi admin untuk aktivasi kembali.');
+            setIsAuthLoading(false);
+            return;
+          }
           router.push('/'); 
         } else {
           await signOut(auth);
@@ -70,7 +77,13 @@ export default function LoginPage() {
       if (access === 'admin') {
         router.push('/admin');
       } else if (access === 'user') {
-        router.push('/');
+        const disabled = await isAccountDisabled(result.user.uid);
+        if (disabled) {
+          await signOut(auth);
+          setErrorMsg('Akun ini dinonaktifkan. Hubungi admin untuk aktivasi kembali.');
+        } else {
+          router.push('/');
+        }
       } else {
         await signOut(auth);
         setErrorMsg("Akses Ditolak! Domain email Anda tidak terdaftar dalam sistem. Gunakan email institusi yang diizinkan.");
@@ -102,7 +115,13 @@ export default function LoginPage() {
       if (access === 'admin') {
         router.push('/admin');
       } else if (access === 'user') {
-        router.push('/');
+        const disabled = await isAccountDisabled(result.user.uid);
+        if (disabled) {
+          await signOut(auth);
+          setErrorMsg('Akun ini dinonaktifkan. Hubungi admin untuk aktivasi kembali.');
+        } else {
+          router.push('/');
+        }
       } else {
         await signOut(auth);
         setErrorMsg("Akses Ditolak! Domain email Anda tidak terdaftar dalam sistem. Gunakan email institusi yang diizinkan.");
@@ -120,6 +139,17 @@ export default function LoginPage() {
       }
     } finally {
       setIsLoggingIn(false);
+    }
+  };
+
+  const isAccountDisabled = async (userId) => {
+    try {
+      const profileRef = doc(db, 'artifacts', appId, 'public', 'data', 'profiles', userId);
+      const profileSnap = await getDoc(profileRef);
+      return profileSnap.exists() && profileSnap.data().disabled === true;
+    } catch (error) {
+      console.error('Gagal memeriksa status akun:', error);
+      return false;
     }
   };
 

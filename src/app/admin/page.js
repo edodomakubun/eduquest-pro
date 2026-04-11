@@ -9,7 +9,7 @@ import {
 } from 'lucide-react';
 import { auth, db } from '../../lib/firebase';
 import { onAuthStateChanged, signOut } from 'firebase/auth';
-import { doc, setDoc, onSnapshot, updateDoc, increment, collection } from 'firebase/firestore';
+import { doc, setDoc, onSnapshot, updateDoc, increment, collection, deleteDoc } from 'firebase/firestore';
 
 const appId = 'eduquest-pro';
 
@@ -19,6 +19,8 @@ export default function AdminPage() {
   
   const [adminTab, setAdminTab] = useState('transactions'); 
   const [allUsers, setAllUsers] = useState([]);
+  const [editingCoinsId, setEditingCoinsId] = useState(null);
+  const [editedCoins, setEditedCoins] = useState(0);
   const [allTransactions, setAllTransactions] = useState([]);
   const [packages, setPackages] = useState([]);
   const [bankDetails, setBankDetails] = useState({ bankName: '', accountName: '', accountNumber: '' });
@@ -160,6 +162,52 @@ export default function AdminPage() {
         await updateDoc(domainsRef, { list: allowedDomains.filter(d => d !== domainToRemove) });
         showSuccess('Domain berhasil dihapus!');
       } catch (e) { showError('Gagal menghapus domain: ' + e.message); }
+    }
+  };
+
+  const handleStartEditCoins = (user) => {
+    setEditingCoinsId(user.id);
+    setEditedCoins(user.coins || 0);
+  };
+
+  const handleCancelEditCoins = () => {
+    setEditingCoinsId(null);
+    setEditedCoins(0);
+  };
+
+  const handleSaveCoins = async (user) => {
+    try {
+      const userRef = doc(db, 'artifacts', appId, 'public', 'data', 'profiles', user.id);
+      await updateDoc(userRef, { coins: Number(editedCoins) });
+      setAllUsers(prev => prev.map(u => u.id === user.id ? { ...u, coins: Number(editedCoins) } : u));
+      setEditingCoinsId(null);
+      setEditedCoins(0);
+      showSuccess(`Koin ${user.name} berhasil diperbarui.`);
+    } catch (e) {
+      showError('Gagal menyimpan koin: ' + e.message);
+    }
+  };
+
+  const handleToggleDisableUser = async (user) => {
+    try {
+      const userRef = doc(db, 'artifacts', appId, 'public', 'data', 'profiles', user.id);
+      await updateDoc(userRef, { disabled: !user.disabled });
+      setAllUsers(prev => prev.map(u => u.id === user.id ? { ...u, disabled: !u.disabled } : u));
+      showSuccess(`Akun ${user.name} berhasil ${user.disabled ? 'diaktifkan' : 'dinonaktifkan'}.`);
+    } catch (e) {
+      showError('Gagal mengubah status akun: ' + e.message);
+    }
+  };
+
+  const handleDeleteUser = async (user) => {
+    if (!confirm(`Hapus data profil ${user.name}? Tindakan ini tidak bisa dibatalkan.`)) return;
+    try {
+      const userRef = doc(db, 'artifacts', appId, 'public', 'data', 'profiles', user.id);
+      await deleteDoc(userRef);
+      setAllUsers(prev => prev.filter(u => u.id !== user.id));
+      showSuccess(`Akun ${user.name} berhasil dihapus.`);
+    } catch (e) {
+      showError('Gagal menghapus akun: ' + e.message);
     }
   };
 
@@ -444,8 +492,30 @@ export default function AdminPage() {
                         <tr key={i} className="border-b hover:bg-slate-50 transition-colors">
                           <td className="p-4 font-medium text-slate-800">{u.name} {u.isPremium && <span className="ml-2 bg-gradient-to-r from-amber-400 to-orange-500 text-white text-[10px] font-bold px-1.5 py-0.5 rounded uppercase">Pro</span>}</td>
                           <td className="p-4 text-slate-500">{u.email}</td>
-                          <td className="p-4 text-center font-bold text-amber-600 text-lg">{u.coins}</td>
-                          <td className="p-4 text-right"><button onClick={() => setSelectedUserHistory(u)} className="bg-slate-800 text-white hover:bg-slate-700 px-3 py-1.5 rounded-lg font-bold flex items-center justify-center ml-auto shadow-sm transition-all"><Clock className="w-4 h-4 mr-1.5" /> Pantau Aktivitas</button></td>
+                          <td className="p-4 text-center font-bold text-amber-600 text-lg">
+                            {editingCoinsId === u.id ? (
+                              <div className="flex items-center justify-center space-x-2">
+                                <input type="number" value={editedCoins} onChange={(e) => setEditedCoins(Number(e.target.value) || 0)} className="w-20 border border-slate-300 rounded-lg px-2 py-1 text-sm text-slate-800" />
+                                <button onClick={() => handleSaveCoins(u)} className="bg-green-600 hover:bg-green-700 text-white px-3 py-1 rounded-lg text-xs font-bold">Simpan</button>
+                                <button onClick={handleCancelEditCoins} className="bg-slate-100 hover:bg-slate-200 text-slate-700 px-3 py-1 rounded-lg text-xs font-bold">Batal</button>
+                              </div>
+                            ) : (
+                              <div className="flex items-center justify-center gap-2">
+                                <span>{u.coins}</span>
+                                <button onClick={() => handleStartEditCoins(u)} className="text-slate-500 hover:text-slate-900 text-xs font-bold">Edit</button>
+                              </div>
+                            )}
+                          </td>
+                          <td className="p-4 text-right space-y-2">
+                            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-end sm:gap-2">
+                              <button onClick={() => setSelectedUserHistory(u)} className="bg-slate-800 text-white hover:bg-slate-700 px-3 py-1.5 rounded-lg font-bold text-xs flex items-center justify-center shadow-sm transition-all w-full sm:w-auto"><Clock className="w-4 h-4 mr-1.5" /> Pantau</button>
+                              <button onClick={() => handleToggleDisableUser(u)} className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-colors w-full sm:w-auto ${u.disabled ? 'bg-amber-500 text-white hover:bg-amber-600' : 'bg-red-500 text-white hover:bg-red-600'}`}>
+                                {u.disabled ? 'Aktifkan' : 'Disable'}
+                              </button>
+                              <button onClick={() => handleDeleteUser(u)} className="bg-red-100 text-red-600 hover:bg-red-200 px-3 py-1.5 rounded-lg font-bold text-xs w-full sm:w-auto">Hapus</button>
+                            </div>
+                            {u.disabled && <span className="inline-flex mt-2 items-center justify-center bg-red-100 text-red-600 text-[11px] font-bold uppercase tracking-[0.15em] px-2 py-1 rounded-full">Nonaktif</span>}
+                          </td>
                         </tr>
                       ))}
                     </tbody>
