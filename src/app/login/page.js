@@ -93,6 +93,10 @@ export default function LoginPage() {
     setErrorMsg("Login via Email dinonaktifkan. Silakan gunakan tombol Masuk dengan Google.");
   };
 
+  const handleRegisterNavigation = () => {
+    router.push('/register');
+  };
+
   if (isAuthLoading) {
     return (
       <div className="min-h-screen flex flex-col items-center justify-center bg-slate-900">
@@ -215,6 +219,10 @@ export default function LoginPage() {
 
           <button onClick={handleGoogleLogin} disabled={isLoggingIn} className="w-full bg-white hover:bg-slate-50 focus:ring-4 focus:ring-blue-500/20 border-2 border-slate-200 text-slate-700 font-bold py-3.5 px-4 rounded-2xl flex items-center justify-center transition-all hover:border-slate-300 disabled:opacity-70 disabled:cursor-not-allowed group shadow-sm">
             {isLoggingIn ? <Loader2 className="w-6 h-6 animate-spin text-blue-600" /> : <><img src="https://img.icons8.com/color/48/google-logo.png" alt="Google" className="w-6 h-6 mr-3 group-hover:scale-110 transition-transform"/><span className="text-sm">Lanjutkan dengan Akun Google</span></>}
+          </button>
+
+          <button type="button" onClick={handleRegisterNavigation} className="w-full mt-4 bg-slate-900 hover:bg-slate-800 text-white font-bold py-3.5 px-4 rounded-2xl transition-all shadow-lg shadow-slate-900/20 flex items-center justify-center">
+            Daftar Akun Baru
           </button>
         </div>
 
