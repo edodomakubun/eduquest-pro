@@ -21,6 +21,7 @@ const fetchAiRoleFromDB = async () => {
   } catch (error) {
     console.error("Gagal menarik Role AI:", error);
   }
+  // Default fallback jika belum di-set admin
   return "Anda adalah asisten pembuat soal ujian untuk Guru SD di Indonesia. Pastikan bahasa mudah dipahami oleh anak Sekolah Dasar.";
 };
 
@@ -37,7 +38,7 @@ export const analyzeBloomWithAI = async (levels, data, isPremium = false, retrie
   
   for (let i = 0; i < retries; i++) {
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 30000); // 30 Detik Timeout
+    const timeoutId = setTimeout(() => controller.abort(), 30000); 
 
     try {
       const response = await fetch(url, {
@@ -92,15 +93,32 @@ export const callGeminiTextAPI = async (formData, isPremium = false, retries = 5
   const prompt = `${systemRole}
   
   TUGAS SAAT INI:
-  Buat total ${totalSoal} soal ujian untuk kelas ${formData.grade} SD, mapel ${formData.subject}. Ujian: ${formData.examType}. 
-  Fokus HANYA pada Taksonomi Bloom: ${activeBlooms}. 
-  Komposisi SOAL WAJIB: \n${typesInstruction}
+  Anda DIWAJIBKAN membuat TEPAT ${totalSoal} soal ujian untuk kelas ${formData.grade} SD, mapel ${formData.subject}. Ujian: ${formData.examType}. 
+  
+  KOMPOSISI SOAL WAJIB (JUMLAH HARUS PERSIS): 
+  ${typesInstruction}
+  
+  Fokus HANYA pada Taksonomi Bloom: ${activeBlooms}.
   
   ${materiContext}
   ${kisiContext}
   
-  Respons HANYA format JSON murni tanpa awalan/akhiran markdown:
-  { "questions": [ { "id": "q1", "type": "Pilihan Ganda", "text": "Teks soal...", "options": ["A. Opsi 1"], "answer": "Jawaban", "bloomLevel": "Pilih satu Bloom", ${imageInstruction} } ] }`;
+  Respons HANYA format JSON murni tanpa awalan/akhiran markdown dengan skema berikut:
+  {
+    "questions": [
+      {
+        "id": "q1",
+        "type": "Tuliskan jenis soalnya (Pilihan Ganda / Isian Singkat / Uraian / Menjodohkan / dll)",
+        "text": "Teks soal...",
+        "options": ["A. Opsi 1", "B. Opsi 2", "C. Opsi 3", "D. Opsi 4"], // Berikan array kosong [] jika tipe soal adalah Uraian/Esai
+        "answer": "Jawaban",
+        "bloomLevel": "Pilih satu Bloom",
+        ${imageInstruction}
+      }
+    ]
+  }
+  
+  PERINGATAN KRITIS: Array "questions" HARUS memiliki TEPAT ${totalSoal} objek. Jangan kurang dari ${totalSoal}!`;
 
   const url = `https://openrouter.ai/api/v1/chat/completions`;
   
@@ -123,7 +141,7 @@ export const callGeminiTextAPI = async (formData, isPremium = false, retries = 5
           messages: [{ role: "user", content: prompt }],
           reasoning: { enabled: true },
           response_format: { type: "json_object" }, 
-          max_tokens: 4000 
+          max_tokens: 8192 
         })
       });
       clearTimeout(timeoutId);
@@ -161,7 +179,7 @@ export const callGeminiKisiKisiAPI = async (formData, isPremium = false, retries
   TUGAS SAAT INI:
   Bertindaklah sebagai ahli pembuat kurikulum Sekolah Dasar (SD) di Indonesia. Buatlah Kisi-Kisi Penyusunan Soal Ujian yang komprehensif, logis, dan terstruktur.
   
-  PARAMETER KISI-KISI:
+  PARAMETER KISI-KISI (JUMLAH HARUS TEPAT ${totalSoal} BARIS KISI-KISI):
   - Mata Pelajaran: ${formData.subject}
   - Kelas / Fase: ${formData.grade}
   - Kurikulum: ${formData.curriculum}
@@ -176,12 +194,11 @@ export const callGeminiKisiKisiAPI = async (formData, isPremium = false, retries
   - Lingkup Materi Pokok: """${formData.materiText}"""
 
   INSTRUKSI PENYUSUNAN:
-  1. Buat indikator soal yang spesifik, operasional (menggunakan KKO yang tepat), dan logis berdasarkan materi.
-  2. Distribusikan level kognitif secara proporsional (gabungan dari L1/C1-C2, L2/C3, L3/C4-C6).
-  3. Indikator biasanya berbunyi seperti: "Disajikan sebuah teks/gambar..., siswa dapat menentukan..."
-  4. Total baris kisi-kisi harus TEPAT ${totalSoal} baris.
+  1. Buat indikator soal yang spesifik, operasional, dan logis.
+  2. Distribusikan level kognitif secara proporsional.
+  3. Total baris "kisi_kisi" dalam JSON WAJIB berjumlah tepat ${totalSoal} baris.
   
-  Respons WAJIB dalam format JSON murni TANPA awalan/akhiran markdown atau teks apapun:
+  Respons WAJIB dalam format JSON murni TANPA awalan/akhiran markdown:
   {
     "kisi_kisi": [
       {
@@ -217,7 +234,7 @@ export const callGeminiKisiKisiAPI = async (formData, isPremium = false, retries
           messages: [{ role: "user", content: prompt }],
           reasoning: { enabled: true },
           response_format: { type: "json_object" }, 
-          max_tokens: 6000 
+          max_tokens: 8192 
         })
       });
       clearTimeout(timeoutId);
@@ -243,74 +260,95 @@ export const callGeminiKisiKisiAPI = async (formData, isPremium = false, retries
   }
 };
 
-// --- FUNGSI GENERATE GAMBAR (UPGRADE KE GEMINI API IMAGEN-4.0) ---
+// --- FUNGSI GENERATE GAMBAR (GEMINI 2.5 FLASH IMAGE PREVIEW DENGAN FALLBACK) ---
 export const callImagenAPI = async (promptText, retries = 3) => {
   const finalPrompt = `cute, colorful cartoon style illustration for elementary school educational material. Highly relevant to the subject context. Child safe, vivid colors, clear outlines. Concept: ${promptText}`;
   
-  // Jika API Key Gemini tidak dipasang, gunakan sistem Pollinations (Fallback)
-  if (!GEMINI_API_KEY) {
-    console.warn("API Key Gemini Image tidak ditemukan, menggunakan fallback Pollinations...");
-    const fallbackUrl = `https://image.pollinations.ai/prompt/${encodeURIComponent(finalPrompt)}?width=400&height=400&nologo=true&seed=${Math.floor(Math.random() * 1000000)}`;
+  // 1. JIKA ADA API KEY GEMINI: Gunakan Google Gemini 2.5 Flash Image Preview
+  if (GEMINI_API_KEY) {
+    const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-image-preview:generateContent?key=${GEMINI_API_KEY}`;
+    
+    for (let i = 0; i < retries; i++) {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 30000); 
+
+      try {
+        if (i > 0) {
+          console.warn(`Mengulang pemuatan gambar dari Gemini Flash Image... Percobaan ke-${i+1}`);
+          await new Promise(r => setTimeout(r, 2000 * i)); 
+        }
+
+        const response = await fetch(url, {
+          method: 'POST',
+          signal: controller.signal,
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            contents: [{ parts: [{ text: finalPrompt }] }],
+            generationConfig: { responseModalities: ["IMAGE"] }
+          })
+        });
+        
+        clearTimeout(timeoutId);
+        
+        if (!response.ok) {
+          const errorData = await response.json();
+          console.error("🚨 DETAIL ERROR GEMINI IMAGE:", errorData);
+          throw new Error(errorData.error?.message || `HTTP Error ${response.status}`);
+        }
+        
+        const data = await response.json();
+        
+        // Ekstrak Base64 dari respons Gemini 2.5 Flash Image Preview
+        const base64Data = data.candidates?.[0]?.content?.parts?.find(p => p.inlineData)?.inlineData?.data;
+        
+        if (base64Data) {
+          return `data:image/jpeg;base64,${base64Data}`;
+        } else {
+          throw new Error("Gambar tidak ditemukan dalam respons Gemini.");
+        }
+        
+      } catch (error) {
+        clearTimeout(timeoutId);
+        if (i === retries - 1) {
+          console.error("Gagal generate gambar via Gemini API. Beralih ke fallback Pollinations...");
+          // Keluar dari loop try Gemini, biarkan turun ke logika Fallback Pollinations di bawah
+        }
+      }
+    }
+  }
+
+  // 2. FALLBACK JIKA API KEY GEMINI KOSONG ATAU LIMIT/GAGAL
+  console.warn("Menggunakan sistem Fallback Pollinations untuk membuat gambar...");
+  for (let i = 0; i < retries; i++) {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 20000); 
+
     try {
-      const response = await fetch(fallbackUrl, { referrerPolicy: "no-referrer" });
+      const randomSeed = Math.floor(Math.random() * 1000000);
+      const fallbackUrl = `https://image.pollinations.ai/prompt/${encodeURIComponent(finalPrompt)}?width=400&height=400&nologo=true&seed=${randomSeed}`;
+      
+      if (i > 0) await new Promise(r => setTimeout(r, 2000 * i)); 
+
+      const response = await fetch(fallbackUrl, { 
+        referrerPolicy: "no-referrer",
+        signal: controller.signal 
+      });
+      clearTimeout(timeoutId);
+      
+      if (!response.ok) throw new Error(`HTTP Error ${response.status}`);
+      
       const blob = await response.blob();
+      
       return await new Promise((resolve, reject) => {
         const reader = new FileReader();
         reader.onloadend = () => resolve(reader.result);
         reader.onerror = reject;
         reader.readAsDataURL(blob);
       });
-    } catch (e) { return null; }
-  }
-
-  // JIKA ADA API KEY: Gunakan Google Gemini Imagen 4 (Via REST API Resmi)
-  const url = `https://generativelanguage.googleapis.com/v1beta/models/imagen-4.0-generate-001:predict?key=${GEMINI_API_KEY}`;
-  
-  for (let i = 0; i < retries; i++) {
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 30000); // 30 Detik Timeout
-
-    try {
-      if (i > 0) {
-        console.warn(`Mengulang pemuatan gambar dari Gemini API... Percobaan ke-${i+1}`);
-        await new Promise(r => setTimeout(r, 2000 * i)); 
-      }
-
-      const response = await fetch(url, {
-        method: 'POST',
-        signal: controller.signal,
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          instances: [{ prompt: finalPrompt }],
-          parameters: { sampleCount: 1, aspectRatio: "1:1" }
-        })
-      });
-      
-      clearTimeout(timeoutId);
-      
-      if (!response.ok) {
-        const errorData = await response.json();
-        console.error("🚨 DETAIL ERROR GEMINI IMAGE:", errorData); // <-- LOG ERROR AKAN MUNCUL DI CONSOLE BROWSER (F12)
-        throw new Error(errorData.error?.message || `HTTP Error ${response.status}`);
-      }
-      
-      const data = await response.json();
-      
-      // Mengambil Base64 mentah dari respons API Google
-      const base64Data = data.predictions?.[0]?.bytesBase64Encoded;
-      
-      if (base64Data) {
-        return `data:image/jpeg;base64,${base64Data}`;
-      } else {
-        throw new Error("Gambar tidak ditemukan dalam respons Gemini.");
-      }
       
     } catch (error) {
       clearTimeout(timeoutId);
-      if (i === retries - 1) {
-        console.error("Gagal generate gambar via Gemini API:", error);
-        return null; 
-      }
+      if (i === retries - 1) return null; 
     }
   }
 };
