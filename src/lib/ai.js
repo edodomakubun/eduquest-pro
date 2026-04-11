@@ -29,8 +29,8 @@ const fetchAiRoleFromDB = async () => {
 export const analyzeBloomWithAI = async (levels, data, isPremium = false, retries = 3) => {
   if (!isPremium) return "Fitur Analisis AI Taksonomi Bloom khusus untuk pengguna Premium.";
 
-  const materiContext = data.rppText?.trim() ? `\n- Materi/Modul Ajar:\n"${data.rppText.substring(0, 1000)}..."` : `\n- Materi/Modul Ajar: (Belum ada materi)`;
-  const kisiContext = data.kisiText?.trim() ? `\n- Kisi-Kisi Acuan:\n"${data.kisiText.substring(0, 1000)}..."` : '';
+  const materiContext = data.rppText?.trim() ? `\n- Materi/Modul Ajar:\n"${data.rppText.substring(0, 4000)}..."` : `\n- Materi/Modul Ajar: (Belum ada materi)`;
+  const kisiContext = data.kisiText?.trim() ? `\n- Kisi-Kisi Acuan:\n"${data.kisiText.substring(0, 4000)}..."` : '';
   
   const prompt = `Anda ahli kurikulum SD. Analisis SANGAT SINGKAT pilihan Taksonomi Bloom: [${levels.join(', ')}]. Konteks: Kelas ${data.grade} SD, Mapel ${data.subject}, Ujian ${data.examType}. ${materiContext} ${kisiContext} Respons WAJIB berupa 1-2 kalimat saja, gunakan teks bersih: - Jika sesuai: Berikan validasi singkat. - Jika kurang tepat: Awali dengan "⚠️ REKOMENDASI:", sebutkan tingkat yang seharusnya dan alasan 1 kalimat.`;
   
@@ -47,14 +47,14 @@ export const analyzeBloomWithAI = async (levels, data, isPremium = false, retrie
         headers: { 
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${OPENROUTER_API_KEY}`,
-          'HTTP-Referer': 'https://eduquest-pro.vercel.app', 
+          'HTTP-Referer': 'https://eduquest-pro-ka55.vercel.app', 
           'X-Title': 'EduQuest Pro'
         },
         body: JSON.stringify({ 
           model: AI_MODEL,
           messages: [{ role: "user", content: prompt }],
           reasoning: { enabled: true },
-          max_tokens: 1000 
+          max_tokens: 4000 
         })
       });
       clearTimeout(timeoutId);
@@ -87,8 +87,8 @@ export const callGeminiTextAPI = async (formData, isPremium = false, retries = 5
 
   const systemRole = await fetchAiRoleFromDB();
 
-  const materiContext = formData.rppText?.trim() ? `Materi Sumber:\n"""\n${formData.rppText.substring(0, 3000)}\n"""\n` : '';
-  const kisiContext = formData.kisiText?.trim() ? `Kisi-Kisi Acuan:\n"""\n${formData.kisiText.substring(0, 3000)}\n"""\n(PASTIKAN soal yang Anda buat BENAR-BENAR MENGIKUTI acuan indikator pada kisi-kisi ini!)\n` : '';
+  const materiContext = formData.rppText?.trim() ? `Materi Sumber:\n"""\n${formData.rppText.substring(0, 4000)}\n"""\n` : '';
+  const kisiContext = formData.kisiText?.trim() ? `Kisi-Kisi Acuan:\n"""\n${formData.kisiText.substring(0, 4000)}\n"""\n(PASTIKAN soal yang Anda buat BENAR-BENAR MENGIKUTI acuan indikator pada kisi-kisi ini!)\n` : '';
 
   const prompt = `${systemRole}
   
@@ -133,7 +133,7 @@ export const callGeminiTextAPI = async (formData, isPremium = false, retries = 5
         headers: { 
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${OPENROUTER_API_KEY}`,
-          'HTTP-Referer': 'https://eduquest-pro.vercel.app',
+          'HTTP-Referer': 'https://eduquest-pro-ka55.vercel.app',
           'X-Title': 'EduQuest Pro'
         },
         body: JSON.stringify({ 
