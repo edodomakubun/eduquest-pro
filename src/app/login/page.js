@@ -109,7 +109,7 @@ export default function LoginPage() {
       }
     } catch (err) {
       const message = err.message || 'Terjadi kesalahan saat login.';
-      if (err.code === 'auth/user-not-found' || err.code === 'auth/wrong-password') {
+      if (err.code === 'auth/user-not-found' || err.code === 'auth/wrong-password' || err.code === 'auth/invalid-credential') {
         setErrorMsg('Email atau password tidak cocok. Mohon periksa kembali.');
       } else if (err.code === 'auth/invalid-email') {
         setErrorMsg('Format email tidak valid.');
