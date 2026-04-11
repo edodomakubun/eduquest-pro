@@ -4,7 +4,7 @@ import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { BookOpen, Sparkles, Clock, ShieldCheck, Loader2, AlertCircle, Wand2, Mail, Lock, Eye, EyeOff, ArrowRight, Globe, Facebook } from 'lucide-react';
 import { auth, googleProvider, db } from '../../lib/firebase';
-import { signInWithPopup, onAuthStateChanged, signOut } from 'firebase/auth';
+import { signInWithPopup, signInWithEmailAndPassword, onAuthStateChanged, signOut } from 'firebase/auth';
 import { doc, getDoc } from 'firebase/firestore';
 
 const appId = 'eduquest-pro';
@@ -84,13 +84,43 @@ export default function LoginPage() {
     }
   };
 
-  const handleEmailLogin = (e) => {
+  const handleEmailLogin = async (e) => {
     e.preventDefault();
     if (!email || !password) {
       setErrorMsg("Harap masukkan email dan password.");
       return;
     }
-    setErrorMsg("Login via Email dinonaktifkan. Silakan gunakan tombol Masuk dengan Google.");
+
+    setIsLoggingIn(true);
+    setErrorMsg('');
+
+    try {
+      const result = await signInWithEmailAndPassword(auth, email, password);
+      const userEmail = result.user.email || '';
+      const access = await checkAccess(userEmail);
+
+      if (access === 'admin') {
+        router.push('/admin');
+      } else if (access === 'user') {
+        router.push('/');
+      } else {
+        await signOut(auth);
+        setErrorMsg("Akses Ditolak! Domain email Anda tidak terdaftar dalam sistem. Gunakan email institusi yang diizinkan.");
+      }
+    } catch (err) {
+      const message = err.message || 'Terjadi kesalahan saat login.';
+      if (err.code === 'auth/user-not-found' || err.code === 'auth/wrong-password') {
+        setErrorMsg('Email atau password tidak cocok. Mohon periksa kembali.');
+      } else if (err.code === 'auth/invalid-email') {
+        setErrorMsg('Format email tidak valid.');
+      } else if (err.code === 'auth/user-disabled') {
+        setErrorMsg('Akun ini dinonaktifkan.');
+      } else {
+        setErrorMsg('Gagal masuk: ' + message);
+      }
+    } finally {
+      setIsLoggingIn(false);
+    }
   };
 
   const handleRegisterNavigation = () => {
