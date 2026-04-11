@@ -243,7 +243,7 @@ export const callGeminiKisiKisiAPI = async (formData, isPremium = false, retries
   }
 };
 
-// --- FUNGSI GENERATE GAMBAR (MENGGUNAKAN GEMINI API IMAGEN-3.0) ---
+// --- FUNGSI GENERATE GAMBAR (UPGRADE KE GEMINI API IMAGEN-4.0) ---
 export const callImagenAPI = async (promptText, retries = 3) => {
   const finalPrompt = `cute, colorful cartoon style illustration for elementary school educational material. Highly relevant to the subject context. Child safe, vivid colors, clear outlines. Concept: ${promptText}`;
   
@@ -263,8 +263,8 @@ export const callImagenAPI = async (promptText, retries = 3) => {
     } catch (e) { return null; }
   }
 
-  // JIKA ADA API KEY: Gunakan Google Gemini Imagen 3 (Via REST API Resmi)
-  const url = `https://generativelanguage.googleapis.com/v1beta/models/imagen-3.0-generate-001:predict?key=${GEMINI_API_KEY}`;
+  // JIKA ADA API KEY: Gunakan Google Gemini Imagen 4 (Via REST API Resmi)
+  const url = `https://generativelanguage.googleapis.com/v1beta/models/imagen-4.0-generate-001:predict?key=${GEMINI_API_KEY}`;
   
   for (let i = 0; i < retries; i++) {
     const controller = new AbortController();
@@ -290,6 +290,7 @@ export const callImagenAPI = async (promptText, retries = 3) => {
       
       if (!response.ok) {
         const errorData = await response.json();
+        console.error("🚨 DETAIL ERROR GEMINI IMAGE:", errorData); // <-- LOG ERROR AKAN MUNCUL DI CONSOLE BROWSER (F12)
         throw new Error(errorData.error?.message || `HTTP Error ${response.status}`);
       }
       
